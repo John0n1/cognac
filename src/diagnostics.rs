@@ -33,6 +33,42 @@ pub fn classify(output: &str, status: Option<i32>) -> Failure {
             "The selected Windows version is incompatible",
             Repair::ChangeWindowsVersion,
         ),
+        (
+            r"(?i)(mfplat|mfreadwrite|evr)\.dll.*(not found|missing|failed)",
+            "missing-media-foundation",
+            "Windows Media Foundation components are missing",
+            Repair::AddMediaFoundation,
+        ),
+        (
+            r"(?i)d3dcompiler_4[367]\.dll.*(not found|missing)",
+            "missing-d3d-compiler",
+            "A DirectX shader compiler runtime is missing",
+            Repair::AddDirectXCompiler,
+        ),
+        (
+            r"(?i)(xactengine|xaudio2)_?\d*\.dll.*(not found|missing)",
+            "missing-xact",
+            "A legacy XAudio/XACT runtime is missing",
+            Repair::AddXact,
+        ),
+        (
+            r"(?i)(fsync|ntsync).*(not supported|failed|permission denied)",
+            "sync-backend",
+            "The selected Wine synchronization backend is unavailable",
+            Repair::DisableSync,
+        ),
+        (
+            r"(?i)(service_kernel_driver|ntloaddriver|failed to load.*\.sys|kernel.*anti.?cheat)",
+            "windows-kernel-required",
+            "The application attempted to install or load a Windows kernel component",
+            Repair::FallbackExecutionClass,
+        ),
+        (
+            r"(?i)(virtual machine detected|hypervisor detected|unsupported virtual environment)",
+            "virtualization-sensitive",
+            "The application's trust system rejected the current environment",
+            Repair::FallbackExecutionClass,
+        ),
     ];
     for (pattern, category, summary, repair) in rules {
         if Regex::new(pattern).expect("static regex").is_match(output) {
@@ -70,5 +106,15 @@ mod tests {
     #[test]
     fn falls_back() {
         assert_eq!(classify("mystery", Some(1)).category, "unknown");
+    }
+
+    #[test]
+    fn kernel_failures_advance_execution_class() {
+        let failure = classify("NtLoadDriver failed for guard.sys", Some(1));
+        assert_eq!(failure.category, "windows-kernel-required");
+        assert!(matches!(
+            failure.repair,
+            Some(Repair::FallbackExecutionClass)
+        ));
     }
 }

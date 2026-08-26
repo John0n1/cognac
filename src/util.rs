@@ -43,7 +43,13 @@ pub fn atomic_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
 }
 
 pub fn command_exists(name: &str) -> bool {
-    std::env::var_os("PATH").is_some_and(|paths| {
-        std::env::split_paths(&paths).any(|directory| directory.join(name).is_file())
+    find_command(name).is_some()
+}
+
+pub fn find_command(name: &str) -> Option<std::path::PathBuf> {
+    std::env::var_os("PATH").and_then(|paths| {
+        std::env::split_paths(&paths)
+            .map(|directory| directory.join(name))
+            .find(|candidate| candidate.is_file())
     })
 }

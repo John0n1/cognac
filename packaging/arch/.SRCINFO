@@ -10,6 +10,7 @@ pkgbase = cognac-bin
 	depends = coreutils
 	depends = tar
 	depends = xz
+	depends = python>=3.10
 	provides = cognac
 	conflicts = cognac
 	options = !debug

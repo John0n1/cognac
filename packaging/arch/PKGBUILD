@@ -6,7 +6,7 @@ pkgdesc='Intelligent Windows application installer for Linux'
 arch=('x86_64')
 url='https://github.com/John0n1/cognac'
 license=('MIT')
-depends=('glibc' 'gcc-libs' 'coreutils' 'tar' 'xz')
+depends=('glibc' 'gcc-libs' 'coreutils' 'tar' 'xz' 'python>=3.10')
 provides=('cognac')
 conflicts=('cognac')
 options=('!debug')

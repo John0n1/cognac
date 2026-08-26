@@ -6,7 +6,7 @@
   />
 </p>
 <p align="center">
-  <strong>Run Windows applications on Linux without babysitting Wine.</strong>
+  <strong>Run Windows applications on Linux without babysitting the compatibility stack.</strong>
 </p>
 
 <p align="center">
@@ -200,6 +200,61 @@ Cognac treats these as implementation details.
 It analyzes the executable and host system, builds an internal compatibility plan, and chooses automatically.
 
 If the first strategy fails, Cognac should attempt another reasonable strategy instead of immediately returning the problem to the user.
+
+---
+
+## Execution classes
+
+Cognac no longer assumes that Wine is always the answer. Analysis now produces
+an ordered execution strategy instead of only selecting a Wine runner:
+
+```text
+ordinary application  -> Wine Staging -> Wine Stable -> UMU -> GE-Proton -> VM
+game                  -> UMU-Proton -> GE-Proton -> Wine -> VM
+kernel/trust workload -> Windows VM provisioning
+observed hard failure -> another class or an evidence-backed final result
+```
+
+The planner considers static PE evidence, application class, host capabilities,
+compatibility profiles, runtime observations, and strategies that succeeded
+previously for the same product identity.
+
+| Execution class | Current state |
+|---|---|
+| Managed Wine | Operational |
+| Proton through UMU | Operational; Cognac can download and verify the official UMU zipapp |
+| Containerized Wine | Capability detection and policy model implemented; execution backend staged |
+| Windows VM | KVM/QEMU/libvirt, OVMF, TPM, IOMMU, and VFIO planning implemented; managed guest provisioning staged |
+| Restricted | Reserved for an observed hard incompatibility or explicit safety boundary |
+
+Runner-family fallbacks use separate environments. Cognac does not reuse a
+prefix initialized by Proton with Wine Stable, or vice versa, while attempting
+to recover an installation.
+
+Anti-cheat and kernel-trust markers do **not** automatically classify an
+application as restricted. They steer the plan toward the best technically
+plausible execution class and Cognac records the observed result.
+
+A licensed Windows base environment and suitable host hardware are unavoidable
+one-time requirements for VM-backed execution. Once provisioned, that detail
+can remain behind the same `cognac application.exe` interface.
+
+The VM preflight reads `~/.config/cognac/windows-vm.json` and only permits local
+libvirt connections:
+
+```json
+{
+  "schema_version": 1,
+  "connection_uri": "qemu:///system",
+  "domain": "cognac-windows",
+  "licensed_windows": true
+}
+```
+
+Cognac validates the domain and its private QEMU guest-agent channel before
+marking it configured. Secure Boot, virtual TPM, and accelerated/VFIO needs are
+tracked independently because a VM merely existing does not mean it can satisfy
+every Windows trust or graphics requirement.
 
 ---
 
@@ -400,6 +455,12 @@ Try another strategy
 ```
 
 This can include switching runners, changing runtime combinations, modifying compatibility settings, or starting from a clean environment.
+
+The current strategy queue recognizes and repairs additional classes including
+Media Foundation, DirectX shader compiler, XAudio/XACT, fsync/ntsync, kernel
+driver, and virtualization-sensitive failures. A newly observed kernel driver
+advances the installation toward VM-backed execution instead of being accepted
+as a successful userspace install.
 
 ---
 
@@ -706,6 +767,12 @@ Cognac should verify that the resulting application can be identified, launched,
 ## Project status
 
 Cognac is under active development.
+
+The execution-class backbone, managed Wine, managed UMU/Proton, isolated
+cross-runner fallbacks, bounded updater observation, launch probing, strategy
+memory, and v1 registry migration are implemented. Container execution and the
+managed Windows guest/VM lifecycle remain active development work; the planner
+reports them without pretending an unavailable backend is ready.
 
 Windows applications vary enormously, and perfect compatibility with every application is not realistic.
 

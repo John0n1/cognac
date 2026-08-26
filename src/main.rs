@@ -1,18 +1,10 @@
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use cognac::{
-    desktop,
-    environment::WineEnvironment,
-    installer,
-    model::InstalledApp,
-    paths::CognacPaths,
-    progress::Progress,
-    registry::AppRegistry,
-    runner::{RunnerInstallation, RunnerManager},
-    system,
+    desktop, execution::ExecutionEnvironment, installer, paths::CognacPaths, progress::Progress,
+    registry::AppRegistry, runner::RunnerManager, system, umu_manager::UmuManager, vm,
 };
 use std::{
-    collections::BTreeMap,
     fs,
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
@@ -128,10 +120,26 @@ fn install_command(paths: &CognacPaths, executable: &Path, cli: &Cli) -> Result<
                 prepared.info.architecture,
                 prepared.info.installer_type
             );
+            let fallbacks = prepared
+                .plan
+                .execution_fallbacks
+                .iter()
+                .filter(|strategy| {
+                    strategy.availability != cognac::model::StrategyAvailability::Blocked
+                        && strategy.class != cognac::model::ExecutionClass::Restricted
+                })
+                .map(|strategy| format!("{} ({})", strategy.class, strategy.backend))
+                .collect::<Vec<_>>();
+            println!("Application class: {}", prepared.info.application_class);
             println!(
-                "Runner: {} → {}",
-                prepared.plan.runner_channel,
-                prepared.plan.runner_fallbacks.join(" → ")
+                "Execution: {} ({}){}",
+                prepared.plan.execution.class,
+                prepared.plan.execution.backend,
+                if fallbacks.is_empty() {
+                    String::new()
+                } else {
+                    format!(" → {}", fallbacks.join(" → "))
+                }
             );
             println!(
                 "Environment: {}, Windows {}",
@@ -149,6 +157,26 @@ fn install_command(paths: &CognacPaths, executable: &Path, cli: &Cli) -> Result<
             );
             for reason in prepared.plan.reasons {
                 println!("  • {reason}");
+            }
+            for reason in prepared.plan.execution.reasons {
+                println!("  • {reason}");
+            }
+            for strategy in prepared
+                .plan
+                .execution_fallbacks
+                .iter()
+                .filter(|strategy| !strategy.blockers.is_empty())
+            {
+                println!(
+                    "  {} {}: {}",
+                    if strategy.availability == cognac::model::StrategyAvailability::Blocked {
+                        "×"
+                    } else {
+                        "○"
+                    },
+                    strategy.class,
+                    strategy.blockers.join("; ")
+                );
             }
         }
         return Ok(());
@@ -181,7 +209,10 @@ fn list_command(paths: &CognacPaths, json: bool) -> Result<()> {
         println!("No applications installed yet. Try: cognac something.exe");
     } else {
         for app in apps {
-            println!("{:<28} {}", app.app_id, app.name);
+            println!(
+                "{:<28} {:<24} {}",
+                app.app_id, app.execution_class, app.name
+            );
         }
     }
     Ok(())
@@ -190,14 +221,19 @@ fn list_command(paths: &CognacPaths, json: bool) -> Result<()> {
 fn run_command(paths: &CognacPaths, query: &str, arguments: &[String], quiet: bool) -> Result<()> {
     let registry = AppRegistry::load(paths)?;
     let app = registry.get(query)?;
-    let runner = runner_from_app(app);
-    let environment = WineEnvironment::new(paths, app.prefix.clone(), runner);
+    let environment = ExecutionEnvironment::from_installed(
+        paths,
+        app.execution_class,
+        app.prefix.clone(),
+        app.runner.clone(),
+        &app.launch_environment,
+    )?;
     let mut args = app.launch_arguments.clone();
     args.extend_from_slice(arguments);
     let progress = Progress::new(format!("Opening {}", app.name), quiet);
     progress.update("Uncorking...", None);
     let log = paths.logs().join(format!("{}.log", app.app_id));
-    environment.launch(&app.executable, &args, &BTreeMap::new(), &log)?;
+    environment.launch(&app.executable, &args, &app.launch_environment, &log)?;
     Ok(())
 }
 
@@ -206,17 +242,23 @@ fn remove_command(paths: &CognacPaths, query: &str) -> Result<()> {
     let app = registry.remove(query)?;
     desktop::remove(paths, &app)?;
     let prefixes = paths.prefixes();
-    if app.prefix.starts_with(&prefixes)
+    let legacy_environment = app.prefix.starts_with(&prefixes)
         && app
             .prefix
             .file_name()
             .is_some_and(|n| n == app.app_id.as_str())
-        && app.prefix.exists()
-    {
+        && app.prefix.exists();
+    let environment_root = paths.environments().join(&app.app_id);
+    let current_environment =
+        app.prefix.starts_with(&environment_root) && environment_root.exists();
+    if legacy_environment {
         fs::remove_dir_all(&app.prefix)
             .with_context(|| format!("cannot remove {}", app.prefix.display()))?;
+    } else if current_environment {
+        fs::remove_dir_all(&environment_root)
+            .with_context(|| format!("cannot remove {}", environment_root.display()))?;
     } else if app.prefix.exists() {
-        bail!("refusing to remove an environment outside Cognac's prefix directory");
+        bail!("refusing to remove an environment outside Cognac's managed directories");
     }
     registry.save(paths)?;
     println!("Removed {} and its isolated environment.", app.name);
@@ -226,11 +268,17 @@ fn remove_command(paths: &CognacPaths, query: &str) -> Result<()> {
 fn repair_command(paths: &CognacPaths, query: &str, quiet: bool) -> Result<()> {
     let registry = AppRegistry::load(paths)?;
     let app = registry.get(query)?;
-    let environment = WineEnvironment::new(paths, app.prefix.clone(), runner_from_app(app));
+    let environment = ExecutionEnvironment::from_installed(
+        paths,
+        app.execution_class,
+        app.prefix.clone(),
+        app.runner.clone(),
+        &app.launch_environment,
+    )?;
     let progress = Progress::new(format!("Repairing {}", app.name), quiet);
     progress.update("Polishing the registry...", None);
     let log = paths.logs().join(format!("{}.log", app.app_id));
-    let outcome = environment.tool("wineboot", ["--update"], &BTreeMap::new(), &log)?;
+    let outcome = environment.update_prefix(&log)?;
     if outcome.status != Some(0) {
         bail!("repair failed (log: {})", log.display());
     }
@@ -248,6 +296,11 @@ fn info_command(paths: &CognacPaths, query: &str, json: bool) -> Result<()> {
         println!("Executable: {}", app.executable.display());
         println!("Environment: {}", app.prefix.display());
         println!("Runner: {}", app.runner.display());
+        println!(
+            "Execution: {} ({})",
+            app.execution_class, app.execution_backend
+        );
+        println!("Classification: {:?}", app.execution_classification);
         println!("Architecture: {}", app.architecture);
         println!("Status: {:?}", app.quality);
         for limitation in &app.limitations {
@@ -273,6 +326,9 @@ fn logs_command(paths: &CognacPaths, query: &str, only_path: bool, lines: usize)
     file.seek(SeekFrom::Start(length.saturating_sub(128 * 1024)))?;
     let mut text = String::new();
     file.read_to_string(&mut text)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let text = String::from_utf8_lossy(&bytes);
     let selected = text.lines().rev().take(lines).collect::<Vec<_>>();
     for line in selected.into_iter().rev() {
         println!("{line}");
@@ -281,7 +337,9 @@ fn logs_command(paths: &CognacPaths, query: &str, only_path: bool, lines: usize)
 }
 
 fn doctor_command(paths: &CognacPaths, json: bool) -> Result<()> {
-    let host = system::detect()?;
+    let mut host = system::detect()?;
+    let vm_report = vm::probe(paths)?;
+    host.capabilities.windows_vm_configured = vm_report.configured;
     if json {
         println!("{}", serde_json::to_string_pretty(&host)?);
         return Ok(());
@@ -313,6 +371,51 @@ fn doctor_command(paths: &CognacPaths, json: bool) -> Result<()> {
             "not detected"
         }
     );
+    println!(
+        "Proton / UMU: {}",
+        if let Some(umu) = UmuManager::new(paths)?.installed() {
+            if umu.managed {
+                "managed launcher ready"
+            } else {
+                "system launcher ready"
+            }
+        } else if host.capabilities.python3 {
+            "will be downloaded when a game needs it"
+        } else {
+            "Python 3.10+ is required"
+        }
+    );
+    println!(
+        "Container isolation: {}",
+        if host.capabilities.bubblewrap || host.capabilities.podman {
+            "host support detected"
+        } else {
+            "not detected"
+        }
+    );
+    println!(
+        "Windows VM: {}",
+        if host.capabilities.windows_vm_configured
+            && host.capabilities.kvm_usable
+            && host.capabilities.qemu
+            && host.capabilities.libvirt
+        {
+            "ready"
+        } else if host.capabilities.cpu_virtualization {
+            "provisioning required"
+        } else {
+            "unavailable"
+        }
+    );
+    println!(
+        "VM trust stack: OVMF {}, swtpm {}, VFIO {}",
+        availability(host.capabilities.ovmf),
+        availability(host.capabilities.swtpm),
+        availability(host.capabilities.iommu && host.capabilities.vfio)
+    );
+    for blocker in &vm_report.blockers {
+        println!("  ○ VM setup: {blocker}");
+    }
     let managed = RunnerManager::new(paths)?.installed("staging");
     println!(
         "Managed runner: {}",
@@ -334,20 +437,14 @@ fn update_command(paths: &CognacPaths, quiet: bool) -> Result<()> {
     paths.ensure()?;
     let progress = Progress::new("Updating Cognac runners", quiet);
     let runner = RunnerManager::new(paths)?.update("staging", &progress)?;
-    println!("✓ Managed runner updated to {}.", runner.version);
+    let umu = UmuManager::new(paths)?.ensure(&progress)?;
+    println!(
+        "✓ Managed Wine runner is {} and UMU launcher is {}.",
+        runner.version, umu.version
+    );
     Ok(())
 }
 
-fn runner_from_app(app: &InstalledApp) -> RunnerInstallation {
-    RunnerInstallation {
-        channel: "installed".into(),
-        version: "installed".into(),
-        root: app
-            .runner
-            .parent()
-            .and_then(Path::parent)
-            .unwrap_or(Path::new("/"))
-            .into(),
-        wine: app.runner.clone(),
-    }
+fn availability(available: bool) -> &'static str {
+    if available { "yes" } else { "no" }
 }

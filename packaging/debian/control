@@ -5,7 +5,7 @@ Priority: optional
 Architecture: amd64
 Maintainer: John Hauger Mitander <john@mitander.io>
 Homepage: https://github.com/John0n1/cognac
-Depends: libc6, libgcc-s1, coreutils, tar, xz-utils
+Depends: libc6, libgcc-s1, coreutils, tar, xz-utils, python3 (>= 3.10)
 Description: intelligent Windows application installer for Linux
  Cognac analyzes Windows executables, provisions a managed compatibility
  environment, installs applications, and integrates them with the Linux desktop.

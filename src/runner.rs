@@ -2,6 +2,7 @@ use crate::{
     paths::CognacPaths,
     progress::Progress,
     util::{atomic_json, command_exists, read_json},
+    util::{atomic_json, command_exists, find_command, read_json},
 };
 use anyhow::{Context, Result, bail};
 use reqwest::blocking::Client;
@@ -78,11 +79,9 @@ impl<'a> RunnerManager<'a> {
     }
 
     pub fn update(&self, channel: &str, progress: &Progress) -> Result<RunnerInstallation> {
-        let metadata = self.paths.runners().join(format!("{channel}.json"));
-        if metadata.exists() {
-            fs::remove_file(metadata)?;
-        }
-        self.ensure(channel, progress)
+        // `download` publishes new metadata only after checksum verification
+        // and extraction, so a failed update leaves the current runner usable.
+        self.download(channel, progress)
     }
 
     fn download(&self, channel: &str, progress: &Progress) -> Result<RunnerInstallation> {

@@ -1,4 +1,4 @@
-use crate::model::{Architecture, ExecutableInfo};
+use crate::model::{Architecture, ExecutableInfo, ExecutionClass};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, path::Path};
@@ -18,6 +18,8 @@ pub struct Profile {
     #[serde(default)]
     pub indicators: Vec<String>,
     pub runner: Option<String>,
+    pub execution_class: Option<ExecutionClass>,
+    pub execution_backend: Option<String>,
     #[serde(default)]
     pub components: Vec<String>,
     pub windows_version: Option<String>,

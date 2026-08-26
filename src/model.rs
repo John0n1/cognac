@@ -1,6 +1,136 @@
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, path::PathBuf};
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum ApplicationClass {
+    Game,
+    Productivity,
+    Media,
+    Legacy,
+    SystemUtility,
+    DriverPackage,
+    #[default]
+    General,
+}
+
+impl std::fmt::Display for ApplicationClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Game => "game",
+            Self::Productivity => "productivity",
+            Self::Media => "media",
+            Self::Legacy => "legacy",
+            Self::SystemUtility => "system utility",
+            Self::DriverPackage => "driver package",
+            Self::General => "general application",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TrustRequirements {
+    pub elevation_likely: bool,
+    pub windows_service_likely: bool,
+    pub kernel_driver_likely: bool,
+    pub anti_cheat: Vec<String>,
+    pub tpm_likely: bool,
+    pub secure_boot_likely: bool,
+    pub direct_hardware_access_likely: bool,
+    pub evidence: Vec<String>,
+}
+
+impl TrustRequirements {
+    pub fn requires_windows_kernel(&self) -> bool {
+        self.kernel_driver_likely
+            || self.tpm_likely
+            || self.secure_boot_likely
+            || self.direct_hardware_access_likely
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionClass {
+    #[default]
+    Wine,
+    ProtonUmu,
+    ContainerizedWine,
+    VirtualMachine,
+    Restricted,
+}
+
+impl std::fmt::Display for ExecutionClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Wine => "Wine",
+            Self::ProtonUmu => "Proton / UMU",
+            Self::ContainerizedWine => "containerized Wine",
+            Self::VirtualMachine => "Windows VM",
+            Self::Restricted => "unsupported / restricted",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum StrategyAvailability {
+    Ready,
+    #[default]
+    Provisionable,
+    Blocked,
+}
+
+impl std::fmt::Display for StrategyAvailability {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Ready => "ready",
+            Self::Provisionable => "provisionable",
+            Self::Blocked => "blocked",
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ExecutionStrategy {
+    pub class: ExecutionClass,
+    pub backend: String,
+    pub availability: StrategyAvailability,
+    pub score: i32,
+    pub reasons: Vec<String>,
+    pub blockers: Vec<String>,
+}
+
+impl ExecutionStrategy {
+    pub fn id(&self) -> String {
+        format!("{}:{}", self.class, self.backend)
+            .to_ascii_lowercase()
+            .replace([' ', '/'], "-")
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct HostCapabilities {
+    pub python3: bool,
+    pub umu_launcher: bool,
+    pub proton_installation: bool,
+    pub bubblewrap: bool,
+    pub podman: bool,
+    pub cpu_virtualization: bool,
+    pub kvm_device: bool,
+    pub kvm_usable: bool,
+    pub qemu: bool,
+    pub libvirt: bool,
+    pub windows_vm_configured: bool,
+    pub ovmf: bool,
+    pub swtpm: bool,
+    pub iommu: bool,
+    pub vfio: bool,
+    pub render_node: bool,
+    pub tpm: bool,
+    pub pipewire: bool,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum Architecture {
@@ -47,6 +177,10 @@ pub struct ExecutableInfo {
     pub graphics_apis: Vec<String>,
     pub frameworks: Vec<String>,
     pub indicators: Vec<String>,
+    #[serde(default)]
+    pub application_class: ApplicationClass,
+    #[serde(default)]
+    pub trust: TrustRequirements,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,11 +193,15 @@ pub struct HostInfo {
     pub vulkan_available: bool,
     pub vulkan_32bit_likely: bool,
     pub desktop_environment: Option<String>,
+    #[serde(default)]
+    pub capabilities: HostCapabilities,
     pub issues: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CompatibilityPlan {
+    pub execution: ExecutionStrategy,
+    pub execution_fallbacks: Vec<ExecutionStrategy>,
     pub runner_channel: String,
     pub runner_fallbacks: Vec<String>,
     pub prefix_architecture: Architecture,
@@ -86,6 +224,18 @@ pub enum ResultQuality {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ExecutionClassification {
+    NativeCompatible,
+    CompatibilityLayer,
+    Virtualized,
+    Degraded,
+    Unsupported,
+    #[default]
+    Unverified,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledApp {
     pub app_id: String,
@@ -97,9 +247,17 @@ pub struct InstalledApp {
     pub installed_at: String,
     pub icon: Option<PathBuf>,
     pub launch_arguments: Vec<String>,
+    #[serde(default)]
+    pub launch_environment: BTreeMap<String, String>,
     pub quality: ResultQuality,
     pub limitations: Vec<String>,
     pub source_sha256: Option<String>,
+    #[serde(default)]
+    pub execution_class: ExecutionClass,
+    #[serde(default)]
+    pub execution_backend: String,
+    #[serde(default)]
+    pub execution_classification: ExecutionClassification,
 }
 
 #[derive(Debug, Clone)]
@@ -114,10 +272,15 @@ pub struct Failure {
 pub enum Repair {
     AddVcrun,
     AddDotNet,
+    AddMediaFoundation,
+    AddDirectXCompiler,
+    AddXact,
     DisableDxvk,
+    DisableSync,
     UseOpenGl,
     ChangeWindowsVersion,
     FallbackRunner,
+    FallbackExecutionClass,
 }
 
 #[derive(Debug, Clone)]

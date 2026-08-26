@@ -1,5 +1,5 @@
 use crate::{
-    model::{CompatibilityPlan, RunOutcome},
+    model::{Architecture, CompatibilityPlan, RunOutcome},
     paths::CognacPaths,
     progress::Progress,
     runner::RunnerInstallation,
@@ -42,7 +42,14 @@ impl<'a> WineEnvironment<'a> {
         fs::create_dir_all(&self.prefix)?;
         progress.update("Convincing Windows it's totally at home...", Some(38));
         let mut initialization = BTreeMap::new();
-        initialization.insert("WINEARCH".into(), "win64".into());
+        initialization.insert(
+            "WINEARCH".into(),
+            match plan.prefix_architecture {
+                Architecture::X86 => "win32",
+                _ => "win64",
+            }
+            .into(),
+        );
         initialization.insert("WINEDLLOVERRIDES".into(), "mscoree,mshtml=".into());
         let outcome = self.tool("wineboot", ["--init"], &initialization, log)?;
         if outcome.status != Some(0) {
@@ -59,7 +66,13 @@ impl<'a> WineEnvironment<'a> {
                 .arg("-q")
                 .args(&plan.components)
                 .envs(self.base_environment());
-            append_command_output(&mut command, log)?;
+            let code = append_command_output(&mut command, log)?;
+            if code != Some(0) {
+                bail!(
+                    "could not install required Windows components: {}",
+                    plan.components.join(", ")
+                );
+            }
         }
         Ok(())
     }
@@ -132,34 +145,11 @@ impl<'a> WineEnvironment<'a> {
     }
 
     pub fn snapshot(&self, app_id: &str, attempt: usize) -> Result<PathBuf> {
-        let destination = self.paths.snapshots().join(format!(
-            "{app_id}-{}-attempt-{attempt}",
-            chrono::Utc::now().timestamp_millis()
-        ));
-        if destination.exists() {
-            bail!("snapshot {} already exists", destination.display());
-        }
-        let status = Command::new("cp")
-            .args(["--archive", "--reflink=auto"])
-            .arg(&self.prefix)
-            .arg(&destination)
-            .status()?;
-        if !status.success() {
-            bail!("could not snapshot prefix before retry");
-        }
-        Ok(destination)
+        snapshot_prefix(self.paths, &self.prefix, app_id, attempt)
     }
 
     pub fn restore(&self, snapshot: &Path) -> Result<()> {
-        let failed = self
-            .prefix
-            .with_extension(format!("failed-{}", chrono::Utc::now().timestamp()));
-        fs::rename(&self.prefix, &failed)?;
-        if let Err(error) = fs::rename(snapshot, &self.prefix) {
-            let _ = fs::rename(&failed, &self.prefix);
-            return Err(error).context("could not restore compatibility snapshot");
-        }
-        Ok(())
+        restore_prefix(&self.prefix, snapshot)
     }
 
     pub fn tool<const N: usize>(
@@ -232,7 +222,7 @@ fn append_command_output(command: &mut Command, log: &Path) -> Result<Option<i32
 /// Run without pipes. Installers often start the installed application before
 /// exiting; descendants inherit pipes and would keep `Command::output` waiting
 /// forever for EOF even though the installer itself has finished.
-fn run_logged(command: &mut Command, log: &Path) -> Result<RunOutcome> {
+pub(crate) fn run_logged(command: &mut Command, log: &Path) -> Result<RunOutcome> {
     let start = fs::metadata(log)
         .map(|metadata| metadata.len())
         .unwrap_or(0);
@@ -252,6 +242,41 @@ fn run_logged(command: &mut Command, log: &Path) -> Result<RunOutcome> {
         log_path: log.to_path_buf(),
         output: String::from_utf8_lossy(&bytes).into_owned(),
     })
+}
+
+pub(crate) fn snapshot_prefix(
+    paths: &CognacPaths,
+    prefix: &Path,
+    app_id: &str,
+    attempt: usize,
+) -> Result<PathBuf> {
+    let destination = paths.snapshots().join(format!(
+        "{app_id}-{}-attempt-{attempt}",
+        chrono::Utc::now().timestamp_millis()
+    ));
+    if destination.exists() {
+        bail!("snapshot {} already exists", destination.display());
+    }
+    let status = Command::new("cp")
+        .args(["--archive", "--reflink=auto"])
+        .arg(prefix)
+        .arg(&destination)
+        .status()?;
+    if !status.success() {
+        bail!("could not snapshot environment before retry");
+    }
+    Ok(destination)
+}
+
+pub(crate) fn restore_prefix(prefix: &Path, snapshot: &Path) -> Result<()> {
+    let failed = prefix.with_extension(format!("failed-{}", chrono::Utc::now().timestamp()));
+    fs::rename(prefix, &failed)?;
+    if let Err(error) = fs::rename(snapshot, prefix) {
+        let _ = fs::rename(&failed, prefix);
+        return Err(error).context("could not restore compatibility snapshot");
+    }
+    let _ = fs::remove_dir_all(&failed);
+    Ok(())
 }
 
 #[cfg(test)]
