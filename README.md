@@ -1,19 +1,32 @@
-# Cognac
-
+<p align="center">
+  <img
+    width="400"
+    alt="Cognac"
+    src="https://github.com/user-attachments/assets/c3cfff59-6b8d-4dd6-a1d6-8f70f58642dd"
+  />
+</p>
 <p align="center">
   <strong>Run Windows applications on Linux without babysitting Wine.</strong>
 </p>
 
 <p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Linux-111111">
-  <img alt="Language" src="https://img.shields.io/badge/language-Rust-111111?color=orange">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-111111?color=blue">
-  <img alt="Architecture" src="https://img.shields.io/badge/arch-x86__64-111111?color=white">
-</p>
-
-<p align="center">
   Cognac is an intelligent compatibility and installation layer for Windows <code>.exe</code> applications on Linux.
 </p>
+<p align="center">
+  <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/cognac_0.1.0_amd64.deb">
+    <img alt="DEB" src="https://img.shields.io/badge/download-DEB-A81D33?logo=debian&logoColor=white">
+  </a>
+  <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/cognac-0.1.0-1.x86_64.rpm">
+    <img alt="RPM" src="https://img.shields.io/badge/download-RPM-294172?logo=fedora&logoColor=white">
+  </a>
+  <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/cognac-bin-0.1.0-1-x86_64.pkg.tar.zst">
+    <img alt="Arch Linux" src="https://img.shields.io/badge/download-Arch-1793D1?logo=archlinux&logoColor=white">
+  </a>
+  <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/Cognac-0.1.0-x86_64.AppImage">
+    <img alt="AppImage" src="https://img.shields.io/badge/download-AppImage-2EA3F2?logo=appimage&logoColor=white">
+  </a>
+</p>
+
 
 ---
 
