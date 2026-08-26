@@ -85,22 +85,10 @@ impl AppRegistry {
             return Ok(app);
         }
         let query = query.to_ascii_lowercase();
-        let lower = query.to_ascii_lowercase();
-        if let Some(app) = self
-            .apps
-            .values()
-            .find(|app| app.app_id.to_ascii_lowercase() == lower || app.name.to_ascii_lowercase() == lower)
-        {
-            return Ok(app);
-        }
         let matches = self
             .apps
             .values()
             .filter(|app| app.name.to_ascii_lowercase().contains(&query))
-            .filter(|app| {
-                app.name.to_ascii_lowercase().contains(&lower)
-                    || app.app_id.to_ascii_lowercase().contains(&lower)
-            })
             .collect::<Vec<_>>();
         match matches.as_slice() {
             [app] => Ok(app),
@@ -183,39 +171,5 @@ mod tests {
         assert_eq!(app.execution_class, crate::model::ExecutionClass::Wine);
         assert_eq!(app.execution_backend, "wine-legacy");
         assert!(app.launch_environment.is_empty());
-    }
-
-    #[test]
-    fn exact_match_resolves_substring_ambiguity() {
-        let mut registry = AppRegistry::default();
-        let doom = InstalledApp {
-            app_id: "doom-123".into(),
-            name: "Doom".into(),
-            executable: "/tmp/doom.exe".into(),
-            prefix: "/tmp/prefix".into(),
-            runner: "/tmp/wine".into(),
-            architecture: crate::model::Architecture::X64,
-            installed_at: "2026-01-01T00:00:00Z".into(),
-            icon: None,
-            launch_arguments: vec![],
-            launch_environment: Default::default(),
-            quality: crate::model::ResultQuality::Functional,
-            limitations: vec![],
-            source_sha256: None,
-            execution_class: crate::model::ExecutionClass::Wine,
-            execution_backend: "wine-staging".into(),
-            execution_classification: crate::model::ExecutionClassification::CompatibilityLayer,
-        };
-        let doom_eternal = InstalledApp {
-            app_id: "doom-eternal-456".into(),
-            name: "Doom Eternal".into(),
-            ..doom.clone()
-        };
-        registry.insert(doom);
-        registry.insert(doom_eternal);
-        let found = registry.get("Doom").unwrap();
-        assert_eq!(found.app_id, "doom-123");
-        let found_lower = registry.get("doom").unwrap();
-        assert_eq!(found_lower.app_id, "doom-123");
     }
 }

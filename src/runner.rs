@@ -2,7 +2,6 @@ use crate::{
     paths::CognacPaths,
     progress::Progress,
     util::{atomic_json, command_exists, read_json},
-    util::{atomic_json, command_exists, find_command, read_json},
 };
 use anyhow::{Context, Result, bail};
 use reqwest::blocking::Client;

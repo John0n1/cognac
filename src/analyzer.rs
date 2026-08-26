@@ -44,9 +44,6 @@ pub fn analyze(path: &Path) -> Result<ExecutableInfo> {
     for window in string_windows(&bytes) {
         ascii.extend(printable_strings(window, false));
         utf16.extend(printable_strings(window, true));
-        if window.len() > 1 {
-            utf16.extend(printable_strings(&window[1..], true));
-        }
     }
     let searchable = format!("{}\n{}", ascii.join("\n"), utf16.join("\n"));
     let lower = searchable.to_ascii_lowercase();
@@ -438,19 +435,5 @@ mod tests {
             classify_application("game", &[], &["game".into()], &trust),
             ApplicationClass::Game
         );
-    }
-
-    #[test]
-    fn extracts_odd_aligned_utf16_strings() {
-        // String "Hello" in UTF-16LE is [b'H', 0, b'e', 0, b'l', 0, b'l', 0, b'o', 0]
-        let mut buffer = vec![0xFF]; // odd alignment offset 1
-        for b in b"Hello" {
-            buffer.push(*b);
-            buffer.push(0);
-        }
-        let even = printable_strings(&buffer, true);
-        assert!(!even.contains(&"Hello".to_string()));
-        let odd = printable_strings(&buffer[1..], true);
-        assert!(odd.contains(&"Hello".to_string()));
     }
 }

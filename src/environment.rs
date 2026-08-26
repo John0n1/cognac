@@ -275,7 +275,6 @@ pub(crate) fn restore_prefix(prefix: &Path, snapshot: &Path) -> Result<()> {
         let _ = fs::rename(&failed, prefix);
         return Err(error).context("could not restore compatibility snapshot");
     }
-    let _ = fs::remove_dir_all(&failed);
     Ok(())
 }
 

@@ -58,19 +58,11 @@ impl CognacPaths {
         Ok(dirs::home_dir()
             .context("cannot determine home")?
             .join(".local/share/applications"))
-        let home = dirs::home_dir().context("cannot determine home")?;
-        Ok(dirs::data_dir()
-            .unwrap_or_else(|| home.join(".local/share"))
-            .join("applications"))
     }
     pub fn icons_dir(&self) -> Result<PathBuf> {
         Ok(dirs::home_dir()
             .context("cannot determine home")?
             .join(".local/share/icons/hicolor/scalable/apps"))
-        let home = dirs::home_dir().context("cannot determine home")?;
-        Ok(dirs::data_dir()
-            .unwrap_or_else(|| home.join(".local/share"))
-            .join("icons/hicolor/scalable/apps"))
     }
 
     pub fn ensure(&self) -> Result<()> {

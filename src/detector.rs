@@ -78,17 +78,6 @@ fn registry_display_icons(prefix: &Path) -> Vec<PathBuf> {
 }
 
 fn windows_path(prefix: &Path, value: &str) -> Option<PathBuf> {
-    let normalized = value
-        .replace("\\\\", "/")
-        .replace('\\', "/")
-        .trim_start_matches("C:/")
-        .trim_start_matches("c:/")
-        .to_owned();
-    if normalized.is_empty()
-        || normalized
-            .split('/')
-            .any(|component| matches!(component, "" | "." | ".."))
-    {
     let normalized = value.replace('\\', "/");
     let trimmed = normalized.trim().trim_matches('"');
     let stripped = trimmed
@@ -108,7 +97,6 @@ fn windows_path(prefix: &Path, value: &str) -> Option<PathBuf> {
     if relative.as_os_str().is_empty() {
         return None;
     }
-    Some(prefix.join("drive_c").join(normalized))
     Some(prefix.join("drive_c").join(relative))
 }
 

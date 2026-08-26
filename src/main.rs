@@ -326,9 +326,6 @@ fn logs_command(paths: &CognacPaths, query: &str, only_path: bool, lines: usize)
     file.seek(SeekFrom::Start(length.saturating_sub(128 * 1024)))?;
     let mut text = String::new();
     file.read_to_string(&mut text)?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    let text = String::from_utf8_lossy(&bytes);
     let selected = text.lines().rev().take(lines).collect::<Vec<_>>();
     for line in selected.into_iter().rev() {
         println!("{line}");

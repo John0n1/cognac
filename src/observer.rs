@@ -64,9 +64,6 @@ fn observe_with_limits(
             last_change = Instant::now();
         }
         active_processes = active_prefix_processes(prefix);
-        if active_processes > 0 {
-            last_change = Instant::now();
-        }
         progress.update(
             if active_processes > 0 {
                 "Letting the updater finish its pour..."
@@ -76,7 +73,6 @@ fn observe_with_limits(
             Some(78),
         );
         if last_change.elapsed() >= quiet_period {
-        if active_processes == 0 && last_change.elapsed() >= quiet_period {
             quiescent = true;
             break;
         }

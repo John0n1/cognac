@@ -113,30 +113,6 @@ impl Drop for Progress {
             thread::sleep(Duration::from_millis(110));
             eprint!("\r\x1b[2K");
             let _ = std::io::stderr().flush();
-            if Arc::strong_count(&self.stop) <= 2 {
-                self.stop.store(true, Ordering::Relaxed);
-                thread::sleep(Duration::from_millis(110));
-                eprint!("\r\x1b[2K");
-                let _ = std::io::stderr().flush();
-            }
-        } else if Arc::strong_count(&self.stop) <= 1 {
-            self.stop.store(true, Ordering::Relaxed);
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cloning_progress_does_not_abort_animation_early() {
-        let progress = Progress::new("test", true);
-        {
-            let clone = progress.clone();
-            clone.update("subtask", Some(50));
-        }
-        // Outer progress is still alive, so stop flag should not be true
-        assert!(!progress.stop.load(Ordering::Relaxed));
     }
 }

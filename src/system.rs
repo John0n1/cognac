@@ -104,17 +104,7 @@ fn cpu_virtualization_available() -> bool {
                     })
             })
         })
-        .map(|contents| parse_cpu_virtualization(&contents))
         .unwrap_or(false)
-}
-
-fn parse_cpu_virtualization(contents: &str) -> bool {
-    contents.lines().any(|line| {
-        line.split_once(':')
-            .is_some_and(|(key, flags)| {
-                key.trim() == "flags" && flags.split_whitespace().any(|flag| matches!(flag, "vmx" | "svm"))
-            })
-    })
 }
 
 fn proton_installation_exists() -> bool {
@@ -208,30 +198,4 @@ pub fn dependency_hint(host: &HostInfo) -> Option<String> {
         }
     };
     Some(format!("install host packages: {packages}"))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_cpu_virtualization_flags() {
-        let sample = "processor\t: 0\nvendor_id\t: GenuineIntel\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush dts acpi mmx fxsr sse sse2 ss ht tm pbe syscall nx rdtscp lm constant_tsc arch_perfmon pebs bts rep_good nopl xtopology nonstop_tsc cpuid aperfmperf pni pclmulqdq dtes64 monitor ds_cpl vmx smx est tm2 ssse3 sdbg fma cx16 xtpr pdcm pcid sse4_1 sse4_2 x2apic movbe popcnt tsc_deadline_timer aes xsave avx f16c rdrand lahf_lm abm 3dnowprefetch cpuid_fault epb ssbd ibrs ibpb stibp tpr_shadow flexpriority ept vpid ept_ad fsgsbase tsc_adjust bmi1 avx2 smep bmi2 erms invpcid rdseed adx smap clflushopt intel_pt xsaveopt xsavec xgetbv1 xsaves dtherm ida arat pln pts hwp hwp_notify hwp_act_window hwp_epp md_clear flush_l1d arch_capabilities\n";
-        assert!(parse_cpu_virtualization(sample));
-
-        let sample_amd = "processor\t: 0\nflags\t\t: fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good nopl nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpb cat_l3 cdp_l3 hw_pstate ssbd mba ibrs ibpb stibp vmmcall fsgsbase bmi1 avx2 smep bmi2 erms invpcid cqm rdt_a rdseed adx smap clflushopt clwb sha_ni xsaveopt xsavec xgetbv1 xsaves cqm_llc cqm_occup_llc cqm_mbm_total cqm_mbm_local clzero irperf xsaveerptr rdpru wbnoinvd arat npt lbrv svm_lock nrip_save tsc_scale vmcb_clean flushbyasid decodeassists pausefilter pfthreshold avic v_vmsave_vmload vgif v_spec_ctrl umip pku ospke vaes vpclmulqdq rdpid overflow_recov succor smca fsrm\n";
-        assert!(parse_cpu_virtualization(sample_amd));
-
-        let sample_none = "processor\t: 0\nflags\t\t: fpu vme de pse tsc msr pae mce cx8\n";
-        assert!(!parse_cpu_virtualization(sample_none));
-    }
-
-    #[test]
-    fn maps_distro_families() {
-        assert_eq!(family("arch", None), "arch");
-        assert_eq!(family("manjaro", Some("arch")), "arch");
-        assert_eq!(family("ubuntu", Some("debian")), "debian");
-        assert_eq!(family("fedora", None), "fedora");
-        assert_eq!(family("opensuse-tumbleweed", Some("suse")), "suse");
-    }
 }

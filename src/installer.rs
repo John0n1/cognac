@@ -354,14 +354,6 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
         memory.save(paths)?;
         return register(paths, app, &progress); 
 
-
-    if failures.is_empty() {
-        bail!("no usable execution strategies were available for this application");
-    }
-    bail!(
-        "installation failed across all attempted strategies:\n{}",
-        failures.join("\n")
-    );
 }
 
 fn recover_interrupted(
