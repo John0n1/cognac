@@ -91,7 +91,8 @@ sed -i "s|^source=.*|source=(\"$PORTABLE.tar.gz\")|" "$ARCHWORK/PKGBUILD"
   makepkg --clean --cleanbuild --force --nodeps --noconfirm
 )
 install -m644 "$ARCHWORK/cognac-bin-${VERSION}-1-x86_64.pkg.tar.zst" "$DIST/"
-install -m644 packaging/arch/PKGBUILD packaging/arch/.SRCINFO "$DIST/"
+install -m644 packaging/arch/PKGBUILD "$DIST/PKGBUILD"
+install -m644 packaging/arch/.SRCINFO "$DIST/SRCINFO"
 
 (
   cd "$DIST"
@@ -101,7 +102,7 @@ install -m644 packaging/arch/PKGBUILD packaging/arch/.SRCINFO "$DIST/"
     "cognac-bin-${VERSION}-1-x86_64.pkg.tar.zst" \
     "Cognac-${VERSION}-x86_64.AppImage" \
     "$PORTABLE.tar.gz" \
-    PKGBUILD .SRCINFO > SHA256SUMS
+    PKGBUILD SRCINFO > SHA256SUMS
 )
 
 echo "Release artifacts are in $DIST"
