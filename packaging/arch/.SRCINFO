@@ -1,0 +1,19 @@
+pkgbase = cognac-bin
+	pkgdesc = Intelligent Windows application installer for Linux
+	pkgver = 0.1.0
+	pkgrel = 1
+	url = https://github.com/John0n1/cognac
+	arch = x86_64
+	license = MIT
+	depends = glibc
+	depends = gcc-libs
+	depends = coreutils
+	depends = tar
+	depends = xz
+	provides = cognac
+	conflicts = cognac
+	options = !debug
+	source = cognac-0.1.0-x86_64.tar.gz::https://github.com/John0n1/cognac/releases/download/v0.1.0/cognac-0.1.0-x86_64.tar.gz
+	sha256sums = ebc360ce0c2dc959e68c5ce033183147529e92ff1c9fbafc2a93a726b263baa5
+
+pkgname = cognac-bin

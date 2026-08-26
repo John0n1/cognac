@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="console-application">
+  <id>io.github.john0n1.cognac</id>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
+  <name>Cognac</name>
+  <summary>Install and manage Windows applications on Linux</summary>
+  <developer id="io.github.john0n1">
+    <name>John Hauger Mitander</name>
+  </developer>
+  <description>
+    <p>
+      Cognac analyzes Windows executables, provisions isolated compatibility
+      environments, installs applications, and integrates them with the Linux
+      desktop.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.john0n1.cognac.desktop</launchable>
+  <url type="homepage">https://github.com/John0n1/cognac</url>
+  <provides>
+    <binary>cognac</binary>
+  </provides>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.1.0" date="2026-08-26"/>
+  </releases>
+</component>

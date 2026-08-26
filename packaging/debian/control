@@ -1,0 +1,11 @@
+Package: cognac
+Version: 0.1.0
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: John Hauger Mitander <john@mitander.io>
+Homepage: https://github.com/John0n1/cognac
+Depends: libc6, libgcc-s1, coreutils, tar, xz-utils
+Description: intelligent Windows application installer for Linux
+ Cognac analyzes Windows executables, provisions a managed compatibility
+ environment, installs applications, and integrates them with the Linux desktop.

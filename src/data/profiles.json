@@ -1,0 +1,22 @@
+{
+  "profiles": [
+    {
+      "id": "generic-unity",
+      "indicators": ["unity", "game"],
+      "runner": "staging",
+      "components": ["vcrun2022"],
+      "windows_version": "win10",
+      "graphics": "dxvk",
+      "limitations": []
+    },
+    {
+      "id": "generic-electron",
+      "indicators": ["electron"],
+      "runner": "stable",
+      "components": [],
+      "windows_version": "win10",
+      "graphics": "builtin",
+      "limitations": []
+    }
+  ]
+}

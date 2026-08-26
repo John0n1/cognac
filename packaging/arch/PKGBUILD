@@ -1,0 +1,23 @@
+# Maintainer: John Hauger Mitander <john@mitander.io>
+pkgname=cognac-bin
+pkgver=0.1.0
+pkgrel=1
+pkgdesc='Intelligent Windows application installer for Linux'
+arch=('x86_64')
+url='https://github.com/John0n1/cognac'
+license=('MIT')
+depends=('glibc' 'gcc-libs' 'coreutils' 'tar' 'xz')
+provides=('cognac')
+conflicts=('cognac')
+options=('!debug')
+source=("cognac-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/cognac-${pkgver}-x86_64.tar.gz")
+sha256sums=('ebc360ce0c2dc959e68c5ce033183147529e92ff1c9fbafc2a93a726b263baa5')
+
+package() {
+  install -Dm755 "${srcdir}/cognac-${pkgver}-x86_64/bin/cognac" \
+    "${pkgdir}/usr/bin/cognac"
+  install -Dm644 "${srcdir}/cognac-${pkgver}-x86_64/LICENSE" \
+    "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+  install -Dm644 "${srcdir}/cognac-${pkgver}-x86_64/README.md" \
+    "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

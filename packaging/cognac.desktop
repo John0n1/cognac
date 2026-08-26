@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Cognac
+Comment=Install and manage Windows applications on Linux
+Exec=cognac
+Icon=cognac
+Terminal=true
+Categories=Utility;
+Keywords=Windows;Wine;Installer;Compatibility;
