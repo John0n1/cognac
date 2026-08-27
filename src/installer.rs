@@ -297,8 +297,10 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
         memory.record_failure(&prepared.info, strategy.class, &strategy.backend);
         memory.save(paths)?;
     }
-    # create windows image if none of the strategies worked
-     if kernel_required {
+
+    // Create a Windows VM if none of the normal strategies worked and the
+    // executable requires Windows-kernel functionality.
+    if kernel_required {
         progress.update("Preparing a Windows virtual machine...", Some(90));
         let vm = vm::prepare(paths, &prepared.info, &prepared.host, &progress)?;
         let strategy = ExecutionStrategy {
@@ -308,9 +310,10 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
         };
         let prefix = strategy_prefix(paths, &app_id, &strategy);
         let log = paths.logs().join(format!("{app_id}.log"));
-        let mut environment = ExecutionEnvironment::provision(paths, &strategy, prefix.clone(), &progress)
+        let mut environment = ExecutionEnvironment::provision(paths, &strategy, prefix, &progress)
             .context("failed to provision a virtual machine environment")?;
-        environment.initialize(&prepared.plan, &progress, &log)
+        environment
+            .initialize(&prepared.plan, &progress, &log)
             .context("failed to initialize a virtual machine environment")?;
         let before = executable_inventory(environment.prefix());
         let snapshot = environment.snapshot(
@@ -319,18 +322,22 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
         )?;
         progress.update("Pouring the installer into the virtual machine...", Some(92));
         let runtime_env = runtime_environment(&prepared.plan, strategy.class);
-        let outcome = environment.run(executable, &[], &runtime_env, &log)
+        let outcome = environment
+            .run(executable, &[], &runtime_env, &log)
             .context("failed to run the installer in the virtual machine")?;
         if !matches!(outcome.status, Some(0 | 194)) {
             let failure = diagnostics::classify(&outcome.output, outcome.status);
-        append_diagnostic(&log, 1, &strategy, &failure) 
-            .context("failed to log the virtual machine installation failure")?;
+            append_diagnostic(&log, 1, &strategy, &failure)
+                .context("failed to log the virtual machine installation failure")?;
             bail!("installer failed in the virtual machine: {}", failure.summary);
         }
         let after = executable_inventory(environment.prefix());
         let installed = discover_installed(environment.prefix(), &before, &after)
             .unwrap_or_else(|| executable.to_path_buf());
-        let launch_environment = persisted_environment(&environment, runtime_environment(&prepared.plan, strategy.class));
+        let launch_environment = persisted_environment(
+            &environment,
+            runtime_environment(&prepared.plan, strategy.class),
+        );
         let quality = ResultQuality::Functional;
         let app = InstalledApp {
             app_id: app_id.clone(),
@@ -344,16 +351,28 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
             launch_arguments: vec![],
             launch_environment,
             quality: quality.clone(),
-            limitations: vec![],    
-        source_sha256: Some(prepared.info.sha256.clone()),
+            limitations: vec![],
+            source_sha256: Some(prepared.info.sha256.clone()),
             execution_class: strategy.class,
             execution_backend: strategy.backend.clone(),
             execution_classification: classification(strategy.class, &quality),
         };
+        if snapshot.exists() {
+            let _ = fs::remove_dir_all(&snapshot);
+        }
         memory.record_success(&prepared.info, strategy.class, &strategy.backend, quality);
         memory.save(paths)?;
-        return register(paths, app, &progress); 
+        return register(paths, app, &progress);
+    }
 
+    bail!(
+        "Cognac could not install the application: {}",
+        if failures.is_empty() {
+            "no compatible execution strategy was available".to_string()
+        } else {
+            failures.join("; ")
+        }
+    );
 }
 
 fn recover_interrupted(
