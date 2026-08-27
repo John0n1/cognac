@@ -19,7 +19,7 @@ use std::{
 pub enum ExecutionEnvironment<'a> {
     Wine(WineEnvironment<'a>),
     Umu(UmuEnvironment<'a>),
-    Vm(VmEnvironment<'a>),
+    Vm(VmEnvironment),
 }
 
 impl<'a> ExecutionEnvironment<'a> {
