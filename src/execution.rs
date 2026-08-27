@@ -8,6 +8,7 @@ use crate::{
     runner::{RunnerInstallation, RunnerManager},
     umu::UmuEnvironment,
     umu_manager::UmuManager,
+    vm::VmEnvironment,
 };
 use anyhow::{Result, bail};
 use std::{
@@ -18,6 +19,7 @@ use std::{
 pub enum ExecutionEnvironment<'a> {
     Wine(WineEnvironment<'a>),
     Umu(UmuEnvironment<'a>),
+    Vm(VmEnvironment),
 }
 
 impl<'a> ExecutionEnvironment<'a> {
@@ -53,9 +55,9 @@ impl<'a> ExecutionEnvironment<'a> {
             ExecutionClass::ContainerizedWine => bail!(
                 "containerized Wine passed planning before its backend was enabled; refusing an unsafe partial sandbox"
             ),
-            ExecutionClass::VirtualMachine => bail!(
-                "the Windows VM satisfies host planning but guest provisioning is not enabled yet; Cognac will not create an unlicensed or unverified Windows image"
-            ),
+            ExecutionClass::VirtualMachine => {
+                Ok(Self::Vm(VmEnvironment::provision(paths, prefix, progress)?))
+            }
             ExecutionClass::Restricted => bail!(
                 "Cognac restricted this application: {}",
                 strategy.reasons.join("; ")
@@ -102,7 +104,7 @@ impl<'a> ExecutionEnvironment<'a> {
                 bail!("this application uses a container backend not supported by this build")
             }
             ExecutionClass::VirtualMachine => {
-                bail!("this application uses a VM backend not supported by this build")
+                Ok(Self::Vm(VmEnvironment::from_installed(paths, prefix)?))
             }
             ExecutionClass::Restricted => bail!("restricted applications cannot be launched"),
         }
@@ -112,6 +114,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(_) => ExecutionClass::Wine,
             Self::Umu(_) => ExecutionClass::ProtonUmu,
+            Self::Vm(_) => ExecutionClass::VirtualMachine,
         }
     }
 
@@ -119,6 +122,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(_) => "wine",
             Self::Umu(_) => "umu",
+            Self::Vm(_) => "libvirt-qemu",
         }
     }
 
@@ -126,6 +130,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => &environment.prefix,
             Self::Umu(environment) => &environment.prefix,
+            Self::Vm(environment) => environment.prefix(),
         }
     }
 
@@ -133,6 +138,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => environment.runner.wine.clone(),
             Self::Umu(environment) => environment.launcher.clone(),
+            Self::Vm(environment) => environment.launcher(),
         }
     }
 
@@ -140,6 +146,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => environment.base_environment(),
             Self::Umu(environment) => environment.base_environment(),
+            Self::Vm(environment) => environment.base_environment(),
         }
     }
 
@@ -152,6 +159,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => environment.initialize(plan, progress, log),
             Self::Umu(environment) => environment.initialize(plan, progress, log),
+            Self::Vm(environment) => environment.initialize(plan, progress, log),
         }
     }
 
@@ -165,6 +173,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => environment.run(executable, args, extra, log),
             Self::Umu(environment) => environment.run(executable, args, extra, log),
+            Self::Vm(environment) => environment.run(executable, args, extra, log),
         }
     }
 
@@ -178,6 +187,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => environment.launch(executable, args, extra, log),
             Self::Umu(environment) => environment.launch(executable, args, extra, log),
+            Self::Vm(environment) => environment.launch(executable, args, extra, log),
         }
     }
 
@@ -185,6 +195,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => environment.snapshot(app_id, attempt),
             Self::Umu(environment) => environment.snapshot(app_id, attempt),
+            Self::Vm(environment) => environment.snapshot(app_id, attempt),
         }
     }
 
@@ -192,6 +203,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => environment.restore(snapshot),
             Self::Umu(environment) => environment.restore(snapshot),
+            Self::Vm(environment) => environment.restore(snapshot),
         }
     }
 
@@ -199,6 +211,7 @@ impl<'a> ExecutionEnvironment<'a> {
         match self {
             Self::Wine(environment) => environment.install_component(component, log),
             Self::Umu(environment) => environment.install_component(component, log),
+            Self::Vm(environment) => environment.install_component(component, log),
         }
     }
 
@@ -208,6 +221,7 @@ impl<'a> ExecutionEnvironment<'a> {
                 environment.tool("wineboot", ["--update"], &BTreeMap::new(), log)
             }
             Self::Umu(environment) => environment.update_prefix(log),
+            Self::Vm(environment) => environment.update(log),
         }
     }
 
@@ -218,6 +232,7 @@ impl<'a> ExecutionEnvironment<'a> {
                 Ok(())
             }
             Self::Umu(_) => bail!("UMU runner changes require an execution-class fallback"),
+            Self::Vm(_) => bail!("a Windows VM does not use a Wine runner"),
         }
     }
 }
