@@ -306,7 +306,10 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
         let strategy = ExecutionStrategy {
             class: ExecutionClass::VirtualMachine,
             backend: vm.backend.clone(),
-            availability: StrategyAvailability::Available,
+            availability: StrategyAvailability::Ready,
+            score: 200,
+            reasons: vec!["Windows-kernel functionality requires the configured Windows VM".into()],
+            blockers: vec![],
         };
         let prefix = strategy_prefix(paths, &app_id, &strategy);
         let log = paths.logs().join(format!("{app_id}.log"));
