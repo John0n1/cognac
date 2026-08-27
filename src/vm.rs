@@ -46,16 +46,15 @@ pub struct PreparedVm {
     pub backend: String,
 }
 
-pub struct VmEnvironment<'a> {
-    paths: &'a CognacPaths,
+pub struct VmEnvironment {
     state_dir: PathBuf,
     config: VmConfig,
     virsh: PathBuf,
     active_snapshot: RefCell<Option<String>>,
 }
 
-impl<'a> VmEnvironment<'a> {
-    pub fn provision(paths: &'a CognacPaths, state_dir: PathBuf, progress: &Progress) -> Result<Self> {
+impl VmEnvironment {
+    pub fn provision(paths: &CognacPaths, state_dir: PathBuf, progress: &Progress) -> Result<Self> {
         let environment = Self::load(paths, state_dir)?;
         progress.update("Starting the Windows VM bridge...", None);
         environment.ensure_ready()?;
@@ -63,17 +62,16 @@ impl<'a> VmEnvironment<'a> {
         Ok(environment)
     }
 
-    pub fn from_installed(paths: &'a CognacPaths, state_dir: PathBuf) -> Result<Self> {
+    pub fn from_installed(paths: &CognacPaths, state_dir: PathBuf) -> Result<Self> {
         let environment = Self::load(paths, state_dir)?;
         environment.ensure_ready()?;
         Ok(environment)
     }
 
-    fn load(paths: &'a CognacPaths, state_dir: PathBuf) -> Result<Self> {
+    fn load(paths: &CognacPaths, state_dir: PathBuf) -> Result<Self> {
         let config = load_config(paths)?;
         let virsh = find_command("virsh").context("virsh/libvirt is not installed")?;
         Ok(Self {
-            paths,
             state_dir,
             config,
             virsh,
@@ -337,7 +335,7 @@ impl<'a> VmEnvironment<'a> {
         let destination = format!(r"{staging}\{}-{name}", unix_millis());
         self.powershell_wait(&format!(
             "New-Item -ItemType Directory -Force -Path '{}' | Out-Null",
-            staging.replace(''', "''")
+            staging.replace('\'', "''")
         ))?;
         let handle = self
             .agent_command(&json!({
