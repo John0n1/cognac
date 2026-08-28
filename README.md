@@ -560,3 +560,4 @@ The user should not have to become a Wine expert first.
 - [Third-party notices](THIRD_PARTY_NOTICES.md)
 - [Disclaimer](DISCLAIMER.md)
 - [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Notice](NOTICE.md)
