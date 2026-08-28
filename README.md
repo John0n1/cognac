@@ -1,16 +1,17 @@
-# Cognac
-
 <p align="center">
-  <strong>Run Windows applications on Linux without babysitting Wine.</strong>
+  <img
+    width="400"
+    alt="Cognac"
+    src="https://github.com/user-attachments/assets/c3cfff59-6b8d-4dd6-a1d6-8f70f58642dd"
+  />
+</p>
+<p align="center">
+  <strong>Run Windows applications on Linux without babysitting the compatibility stack.</strong>
 </p>
 
 <p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Linux-111111">
-  <img alt="Language" src="https://img.shields.io/badge/language-Rust-111111?color=orange">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-111111?color=blue">
-  <img alt="Architecture" src="https://img.shields.io/badge/arch-x86__64-111111?color=white">
+  Cognac is an intelligent compatibility and installation layer for Windows <code>.exe</code> applications on Linux.
 </p>
-
 <p align="center">
   <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/cognac_0.1.0_amd64.deb">
     <img alt="DEB" src="https://img.shields.io/badge/download-DEB-A81D33?logo=debian&logoColor=white">
@@ -26,312 +27,469 @@
   </a>
 </p>
 
-<p align="center">
-  <img
-    width="400"
-    alt="Cognac"
-    src="https://github.com/user-attachments/assets/c3cfff59-6b8d-4dd6-a1d6-8f70f58642dd"
-  />
-</p>
 
-<p align="center">
-  Cognac is an intelligent compatibility and installation layer for Windows <code>.exe</code> applications on Linux.
-</p>
+---
 
 ## The idea
 
-Running a Windows application on Linux often means figuring out Wine versions, prefixes, Winetricks components, DXVK, Vulkan libraries, architecture mismatches, installer quirks, and a long list of application-specific workarounds.
-
-Cognac is meant to make that somebody else's problem.
+The intended experience is simple:
 
 ```bash
 cognac something.exe
 ```
 
-Cognac inspects the executable and the Linux host, plans a compatible environment, downloads or selects the required compatibility runner, installs Windows components, runs the installer, watches what happens, retries known repairs when something fails, discovers the installed application, and creates a Linux desktop launcher.
+Cognac handles the rest.
 
-The user should not need to understand Wine prefixes to install a Windows application.
+No manual Wine prefixes.<br>
+No hunting for missing DLLs.<br>
+No guessing which Wine or Proton build to use.<br>
+No Winetricks rabbit hole.<br>
+No endless terminal output.
+
+If a Windows application can reasonably be made to run on Linux, Cognac should figure out how.
+
+---
 
 ## What Cognac does
 
-A typical Cognac install looks like this internally:
+Give Cognac an executable:
 
-```text
-random.exe
-    ↓
-analyze executable
-    ↓
-inspect Linux host
-    ↓
-select execution class
-    ↓
-provision compatibility runtime
-    ↓
-resolve Linux + Windows dependencies
-    ↓
-create isolated environment
-    ↓
-install
-    ↓
-observe installer and child processes
-    ↓
-classify failures
-    ↓
-repair / rollback / retry
-    ↓
-discover installed application
-    ↓
-create Linux launcher
+```bash
+cognac VLCSetup.exe
 ```
 
-Cognac currently understands multiple execution classes:
+Cognac automatically works through the installation process:
 
 ```text
-Wine
-Proton / UMU
-Containerized Wine
-Windows VM
-Unsupported / restricted
+Executable
+    |
+    v
+Analyze application
+    |
+    v
+Inspect Linux host
+    |
+    v
+Resolve compatibility requirements
+    |
+    v
+Provision runners and dependencies
+    |
+    v
+Create isolated environment
+    |
+    v
+Install application
+    |
+    v
+Observe and repair failures
+    |
+    v
+Detect installed executable
+    |
+    v
+Create Linux launcher
+    |
+    v
+Done
 ```
 
-The selected execution strategy depends on the executable and on the capabilities of the current Linux host.
+Internally, Cognac can:
+
+- inspect the executable
+- detect 32-bit and 64-bit applications
+- identify installer types
+- inspect application metadata
+- detect missing Linux dependencies
+- obtain and manage Wine and Proton-compatible runners
+- install required Windows runtimes
+- configure DXVK and VKD3D where appropriate
+- handle architecture requirements
+- create isolated application environments
+- monitor installation behavior
+- detect common compatibility failures
+- automatically apply fixes
+- retry using alternative strategies
+- detect the installed application
+- extract its icon
+- create desktop integration
+- preserve detailed logs without flooding the terminal
+
+The user should rarely need to know any of this happened.
+
+---
 
 ## Usage
 
-Install or launch an executable directly:
+The primary interface is intentionally small.
 
 ```bash
-cognac setup.exe
+cognac something.exe
 ```
 
-Analyze without making changes:
-
-```bash
-cognac --dry-run setup.exe
-```
-
-Machine-readable planning output:
-
-```bash
-cognac --dry-run --json setup.exe
-```
-
-List installed applications:
+Installed applications can be managed through Cognac:
 
 ```bash
 cognac list
-```
-
-Launch one later:
-
-```bash
-cognac run my-app
-```
-
-Inspect its state:
-
-```bash
-cognac info my-app
-```
-
-Show logs:
-
-```bash
-cognac logs my-app
-```
-
-Repair its managed environment:
-
-```bash
-cognac repair my-app
-```
-
-Remove it:
-
-```bash
-cognac remove my-app
-```
-
-Check the host:
-
-```bash
+cognac run <app>
+cognac info <app>
+cognac repair <app>
+cognac remove <app>
+cognac logs <app>
 cognac doctor
-```
-
-Update managed runners:
-
-```bash
 cognac update
 ```
 
+Advanced debugging options may expose additional information, but they should not be required during normal use.
+
+---
+
 ## Quiet by default
 
-Cognac is designed around one coherent progress interface rather than dumping raw Wine output into the terminal.
+Cognac should avoid turning installation into a wall of Wine output.
 
-Typical status messages include:
+The normal interface should stay compact and update in place:
 
 ```text
-Aging a fresh Windows vintage...
-Fetching grapes...
-Convincing Windows it's totally at home...
-Collecting tiny pieces of Windows...
-Trying another barrel...
-Corking the bottle...
+Cognac
+
+Installing VLC
+
+███████████████████░░░░░ 78%
+
+Teaching DirectX to speak Vulkan...
+~20 seconds remaining
 ```
 
-Detailed diagnostics are written to managed log files and can be inspected later with:
+When complete:
+
+```text
+VLC installed
+Application launcher created
+Ready
+```
+
+Raw logs are preserved and can be inspected when needed:
 
 ```bash
-cognac logs <app>
+cognac logs VLC
 ```
 
-## Cognac makes decisions
+Verbose and debugging modes can expose the underlying runner output for troubleshooting.
 
-Cognac tries to infer what an application needs instead of asking the user to choose every compatibility detail manually.
+---
 
-The executable analyzer currently examines information such as:
+## Cognac makes the decisions
 
-- PE architecture
-- installer family
-- imported DLLs
-- graphics APIs
-- common runtime/framework indicators
-- product and publisher metadata
-- game indicators
-- service installation indicators
-- kernel driver indicators
-- anti-cheat markers
-- likely Secure Boot or TPM requirements
+Traditional Wine workflows often require the user to decide:
 
-The host analyzer checks capabilities such as:
+```text
+Which Wine version?
+Which prefix architecture?
+Wine or Proton?
+Install DXVK?
+Install .NET?
+Install Visual C++?
+Which Windows version?
+Install Mono?
+Which DLL overrides?
+```
 
-- distribution family
-- package manager
-- Vulkan
-- 32-bit Vulkan support
-- Python
-- UMU
-- Proton installations
-- Bubblewrap / Podman
-- CPU virtualization
-- KVM
-- QEMU
-- libvirt
-- OVMF
-- swtpm
-- IOMMU / VFIO
-- render nodes
-- TPM devices
-- PipeWire
+Cognac treats these as implementation details.
 
-The planner then scores available execution strategies.
+It analyzes the executable and host system, builds an internal compatibility plan, and chooses automatically.
 
-Ordinary desktop applications generally prefer Wine. Games prefer Proton/UMU when available. Applications requiring genuine Windows kernel behavior can be routed toward a configured Windows VM instead of repeatedly attempting an impossible Wine setup.
+If the first strategy fails, Cognac should attempt another reasonable strategy instead of immediately returning the problem to the user.
+
+---
+
+## Execution classes
+
+Cognac no longer assumes that Wine is always the answer. Analysis now produces
+an ordered execution strategy instead of only selecting a Wine runner:
+
+```text
+ordinary application  -> Wine Staging -> Wine Stable -> UMU -> GE-Proton -> VM
+game                  -> UMU-Proton -> GE-Proton -> Wine -> VM
+kernel/trust workload -> Windows VM provisioning
+observed hard failure -> another class or an evidence-backed final result
+```
+
+The planner considers static PE evidence, application class, host capabilities,
+compatibility profiles, runtime observations, and strategies that succeeded
+previously for the same product identity.
+
+| Execution class | Current state |
+|---|---|
+| Managed Wine | Operational |
+| Proton through UMU | Operational; Cognac can download and verify the official UMU zipapp |
+| Containerized Wine | Capability detection and policy model implemented; execution backend staged |
+| Windows VM | KVM/QEMU/libvirt, OVMF, TPM, IOMMU, and VFIO planning implemented; managed guest provisioning staged |
+| Restricted | Reserved for an observed hard incompatibility or explicit safety boundary |
+
+Runner-family fallbacks use separate environments. Cognac does not reuse a
+prefix initialized by Proton with Wine Stable, or vice versa, while attempting
+to recover an installation.
+
+Anti-cheat and kernel-trust markers do **not** automatically classify an
+application as restricted. They steer the plan toward the best technically
+plausible execution class and Cognac records the observed result.
+
+A licensed Windows base environment and suitable host hardware are unavoidable
+one-time requirements for VM-backed execution. Once provisioned, that detail
+can remain behind the same `cognac application.exe` interface.
+
+The VM preflight reads `~/.config/cognac/windows-vm.json` and only permits local
+libvirt connections:
+
+```json
+{
+  "schema_version": 1,
+  "connection_uri": "qemu:///system",
+  "domain": "cognac-windows",
+  "licensed_windows": true
+}
+```
+
+Cognac validates the domain and its private QEMU guest-agent channel before
+marking it configured. Secure Boot, virtual TPM, and accelerated/VFIO needs are
+tracked independently because a VM merely existing does not mean it can satisfy
+every Windows trust or graphics requirement.
+
+---
 
 ## Self-bootstrapping
 
-Cognac tries to carry its own compatibility tooling where practical.
+Wine should not need to be installed before Cognac.
 
-Managed Wine runners are downloaded on demand and verified before installation. If a managed Wine download cannot be used but a system Wine is available, Cognac can fall back to it.
+A fresh system should eventually be able to go directly from:
 
-For game-focused execution Cognac can use the UMU launcher and can install a verified managed UMU zipapp when needed.
+```bash
+cognac SomeApplication.exe
+```
 
-Winetricks is also downloaded as a pinned, checksum-verified tool when Cognac needs Windows compatibility components.
+to a running application.
 
-The long-term goal is that a fresh Linux install should need as little manual preparation as possible.
+Cognac can obtain and manage compatibility components such as:
+
+- Wine
+- Wine Staging
+- Wine-GE
+- Proton-compatible runners
+- UMU-based environments
+- DXVK
+- VKD3D-Proton
+- Wine Mono
+- Wine Gecko
+- Visual C++ runtimes
+- .NET Framework components
+- DirectX components
+- Media Foundation components
+- other commonly required Windows dependencies
+
+Wine and Proton are backends.
+
+They are not the user interface.
+
+---
 
 ## Linux dependency resolution
 
-Cognac reasons about host capabilities rather than hard-coding a single distribution.
+Cognac also resolves Linux-side requirements.
 
-Current package-manager detection includes:
+For example:
 
-- pacman
-- apt
-- dnf
-- zypper
+```text
+Windows application
+        |
+        v
+Requires 32-bit Vulkan
+        |
+        v
+Inspect Linux distribution
+        |
+        v
+Resolve equivalent host package
+        |
+        v
+Install or provision dependency
+        |
+        v
+Continue
+```
 
-For example, a missing 32-bit Vulkan loader is the same compatibility requirement everywhere, but the package name differs by distribution.
+The same capability may correspond to different packages depending on the distribution.
 
-Cognac currently detects and explains these missing host capabilities. Automatic privileged host-package installation is an area of active development.
+Cognac should reason about capabilities instead of requiring application logic to know every package name directly.
+
+Initial package-manager targets include:
+
+```text
+pacman
+apt
+dnf
+zypper
+```
+
+Additional backends can be added later.
+
+---
 
 ## Architecture handling
 
-32-bit Windows applications run inside a unified WoW64-style 64-bit prefix by default, avoiding the fragility of maintaining separate legacy 32-bit environments where possible.
+Architecture differences should remain invisible to the user.
 
-Current managed Wine runners target x86_64 Linux hosts.
+Cognac should automatically handle scenarios including:
 
-Windows ARM64 executables are detected but are not automatically supported yet.
+```text
+32-bit Windows executable
+64-bit Windows executable
+32-bit installer -> 64-bit application
+WoW64
+multilib requirements
+mixed architecture dependencies
+```
+
+If the host requires additional architecture support, Cognac should detect and provision it where possible.
+
+---
 
 ## Application analysis
 
-Cognac parses Windows PE executables directly in Rust.
+Before executing an application, Cognac can inspect information such as:
 
-It identifies common installer technologies including:
+- PE architecture
+- product metadata
+- application name
+- version
+- publisher
+- installer technology
+- embedded manifests
+- imported DLLs
+- .NET metadata
+- likely graphics requirements
+- known executable fingerprints
+- compatibility profiles
 
-- MSI
-- Inno Setup
-- NSIS
-- InstallShield
-- WiX Burn
-- Squirrel
-- portable or unknown executables
+This information helps Cognac determine an initial installation strategy before blindly launching the executable.
 
-It also detects common runtime needs such as:
-
-- Visual C++ runtime
-- .NET Framework
-- Windows Media Foundation
-- Direct3D 9/11/12
-- DXGI
-- Vulkan
-- OpenGL
-
-These hints feed into the compatibility plan before the installer is run.
+---
 
 ## Compatibility knowledge
 
-Cognac combines generic analysis with an optional compatibility profile database.
+Known applications can use reusable compatibility profiles containing information such as:
 
-A profile can override or extend:
+```text
+preferred runner
+required runtimes
+Windows version
+graphics backend
+known fixes
+DLL overrides
+installer quirks
+known limitations
+```
 
-- preferred execution class
-- runner
-- Windows version
-- graphics backend
-- prefix architecture
-- required components
-- DLL overrides
+Unknown applications should still work through generic analysis, probing, and runtime observation.
 
-This makes known-good application recipes possible without turning Cognac into a static database-only installer.
+Application identification should rely on stronger signals than filenames alone.
 
-The generic analyzer remains the fallback for unknown executables.
+Useful identifiers can include:
+
+```text
+SHA-256
+publisher
+product metadata
+version
+installer metadata
+executable characteristics
+```
+
+Compatibility knowledge should remain separate from the core where practical so new application profiles can be added without rebuilding Cognac itself.
+
+---
 
 ## Automatic repair
 
-When an installation fails, Cognac classifies the output and can apply known repairs before retrying.
+Failure should not immediately mean installation failure.
 
-Current repair categories include:
+Cognac should recognize and react to common problems such as:
 
-- missing Visual C++ runtime
-- missing .NET runtime
-- missing Media Foundation
-- missing DirectX shader compiler
-- missing XACT / XAudio runtime
-- Vulkan/DXVK initialization failures
-- VKD3D failures
-- unsupported Windows version
-- synchronization backend failures
-- Windows kernel driver requirements
-- virtualization-sensitive failures
+- missing DLLs
+- missing Visual C++ runtimes
+- .NET initialization failures
+- Wine Mono conflicts
+- graphics initialization errors
+- missing Vulkan support
+- missing 32-bit host libraries
+- incompatible runner versions
+- unsuitable Windows version settings
+- installer-specific behavior
+- missing optional Windows components
 
-Repairs can install components, change graphics paths, change Windows versions, disable unsupported synchronization mechanisms, or advance to another runner/execution class.
+The normal recovery flow is:
+
+```text
+Failure detected
+      |
+      v
+Classify cause
+      |
+      v
+Apply repair
+      |
+      v
+Retry
+```
+
+If necessary:
+
+```text
+Repair failed
+      |
+      v
+Restore previous state
+      |
+      v
+Try another strategy
+```
+
+This can include switching runners, changing runtime combinations, modifying compatibility settings, or starting from a clean environment.
+
+The current strategy queue recognizes and repairs additional classes including
+Media Foundation, DirectX shader compiler, XAudio/XACT, fsync/ntsync, kernel
+driver, and virtualization-sensitive failures. A newly observed kernel driver
+advances the installation toward VM-backed execution instead of being accepted
+as a successful userspace install.
+
+---
 
 ## Graceful degradation
 
-Not every warning means an application is unusable.
+Not every missing feature should stop an installation.
 
-Cognac records installation quality separately from simple process exit status:
+Cognac should distinguish between:
+
+```text
+Required
+Recommended
+Optional
+```
+
+and between:
+
+```text
+Fatal
+Retryable
+Degraded
+Ignorable
+```
+
+A Windows application may depend on a vendor-specific hardware driver for one feature while the rest of the application remains completely usable.
+
+In such a case, Cognac should generally continue rather than treating the entire application as unusable.
+
+Internally, installations can be classified as:
 
 ```text
 Fully functional
@@ -341,223 +499,329 @@ Unverified
 Failed
 ```
 
-This allows Cognac to accept a usable installation while clearly recording missing optional functionality.
+The normal user-facing result should remain concise.
 
-An application can therefore be installed successfully even when some non-critical feature cannot be supported.
+---
 
 ## Safe retries
 
-Cognac snapshots an application's environment before risky installation attempts.
+Compatibility changes can sometimes make an environment worse.
 
-If a repair is needed, Cognac restores the previous environment before retrying rather than repeatedly mutating an already-broken prefix.
+Cognac should preserve application state before major changes where practical.
 
-On supported filesystems normal compatibility environments use copy-on-write/reflink snapshots where available.
+```text
+Current state
+     |
+     v
+Try compatibility change
+     |
+     +---- success ----> keep it
+     |
+     +---- failure ----> rollback
+                           |
+                           v
+                    try alternative
+```
 
-The Windows VM backend uses libvirt snapshots.
+This allows the resolver to experiment without permanently destroying a promising configuration.
+
+---
 
 ## Installer and process tracking
 
-Windows installers frequently launch child processes, updaters, launchers, or the installed application before the original installer exits.
+Many installers do not simply start and exit.
 
-Cognac avoids treating the parent installer process as the entire installation lifecycle.
+They may:
 
-After installation it watches the environment for:
+- spawn child installers
+- restart themselves
+- launch an updater
+- continue setup in another process
+- install background components
+- relaunch the application
+- update immediately after installation
 
-- filesystem changes
-- active Wine-prefix processes
-- service activity
-- Windows kernel-driver activity
-- reboot requests
-- background updater activity
+Cognac should track the installation lifecycle rather than assuming that the original `.exe` process represents the entire installation.
 
-This helps Cognac distinguish a finished installer from an installation that is still settling.
+This is especially important for bootstrap installers and self-updating applications.
+
+---
 
 ## Installed application detection
 
-Cognac compares the environment before and after installation and searches for newly installed executables.
+After installation, Cognac should determine what was actually installed.
 
-The selected executable is persisted in Cognac's application registry so future launches do not require the user to know the Wine prefix or installed Windows path.
+Useful signals include:
 
-VM-backed installations synchronize the executable inventory from the Windows guest through the QEMU Guest Agent.
+- new filesystem entries
+- Program Files changes
+- Start Menu shortcuts
+- Desktop shortcuts
+- registry uninstall entries
+- newly created executables
+- installer child processes
+
+From this, Cognac should determine:
+
+```text
+Application name
+Main executable
+Launch arguments
+Icon
+Environment
+Runner
+Prefix
+```
+
+The result becomes a managed Cognac application.
+
+---
 
 ## Desktop integration
 
-Successful applications get a freedesktop desktop entry automatically.
+Installed Windows applications should feel like normal Linux applications.
 
-The generated launcher calls Cognac rather than exposing the compatibility runtime directly:
+Cognac should automatically create:
+
+- desktop entries
+- application-menu entries
+- icons
+- launcher commands
+- application metadata
+
+Once installed, the user should be able to launch the application from environments such as:
 
 ```text
-Exec=cognac run <app-id>
+GNOME
+KDE Plasma
+XFCE
+Cinnamon
+other freedesktop-compatible desktops
 ```
 
-That means Cognac remains responsible for reconstructing the correct runner, environment variables, prefix, and execution backend when the application is opened later.
+Launching the application should not require knowing anything about its Wine prefix or runner.
+
+---
 
 ## Managed environments
 
-Cognac keeps its state under the user's standard XDG directories.
+Cognac keeps applications and compatibility components organized and isolated.
 
-Conceptually:
+A Cognac installation may use a structure similar to:
 
 ```text
-~/.local/share/cognac/
-  environments/
-  runners/
-  tools/
-  icons/
-  logs/
-  snapshots/
-  registry.json
-  strategies.json
-
-~/.config/cognac/
-  profiles.json
-  windows-vm.json
+cognac/
+├── apps/
+├── prefixes/
+├── runners/
+├── components/
+├── compatibility/
+├── cache/
+├── icons/
+├── logs/
+└── cognac.db
 ```
 
-Each execution strategy gets an isolated environment.
+Applications should not depend on manually maintained Wine prefixes scattered throughout the user's home directory.
 
-A failed Wine attempt therefore does not contaminate a Proton attempt, and a stable Wine fallback does not reuse a staging prefix.
-
-## Strategy memory
-
-Cognac remembers execution strategies that have worked previously.
-
-Success is keyed both by executable hash and by application identity, allowing a later version of the same installer to benefit from a strategy that worked before.
-
-A known-good strategy receives a strong preference during future planning.
-
-The objective is for Cognac to become less experimental as it learns which execution paths consistently work for an application.
-
-## Windows VM execution
-
-Some Windows applications depend on behavior that Wine and Proton fundamentally cannot provide, such as genuine Windows kernel-mode drivers.
-
-Cognac can detect this class of requirement and route the application toward a Windows VM backend.
-
-The current VM backend integrates with libvirt/QEMU and uses the QEMU Guest Agent to:
-
-- start the managed Windows guest
-- stage installer files inside Windows
-- execute Windows processes
-- capture process results
-- synchronize installed executable inventory
-- create and restore libvirt snapshots
-
-Cognac also probes the VM for features such as:
-
-- EFI firmware
-- Secure Boot
-- virtual TPM 2.0
-- QEMU Guest Agent
-
-The user is responsible for a valid Windows license.
-
-Automatic creation and provisioning of the Windows guest is still under development.
-
-Cognac does not attempt to disguise virtualization from software that explicitly rejects virtual machines.
+---
 
 ## Progress and ETA
 
-Progress reporting is intentionally coarse.
+Where practical, Cognac should estimate remaining installation time.
 
-Compatibility operations can involve downloads, Wine initialization, installers, updater processes, and runtime repair. Exact completion times are often unknowable.
+When uncertainty is high, ranges are preferable to fake precision:
 
-Cognac therefore prefers meaningful stages and approximate progress over fake precision.
+```text
+~30-45 seconds remaining
+```
+
+Estimates can improve as Cognac learns more about:
+
+- download size
+- current transfer speed
+- prefix initialization
+- dependency installation
+- compatibility preparation
+- installer progress
+
+---
+
+## Status messages
+
+Cognac can occasionally display subtle rotating status messages while working.
+
+Examples:
+
+```text
+Aging a fresh Windows vintage...
+Fetching grapes...
+Teaching DirectX to speak Vulkan...
+Convincing Windows it's totally at home...
+Polishing the registry...
+Collecting tiny pieces of Windows...
+Microsoft requires additional Microsoft...
+Trying another barrel...
+Leaving some Windows baggage behind...
+Corking the bottle...
+Nobody mention this to Microsoft.
+```
+
+They should remain secondary to useful progress information and should never turn the interface into terminal spam.
+
+---
 
 ## Built with Rust
 
-Cognac's core is written in Rust.
+Cognac's core is built in **Rust**.
 
-The project uses Rust for:
+Rust provides a strong foundation for:
 
-- PE parsing
-- compatibility planning
-- host detection
-- runner management
-- process execution
-- diagnostics
-- rollback orchestration
-- application registry management
-- desktop integration
+- native Linux integration
+- process management
+- concurrency
+- downloads and caching
+- filesystem operations
+- executable analysis
+- structured error handling
+- package-manager integration
+- long-running compatibility orchestration
 
-External compatibility tools are invoked only where reimplementing them would provide no meaningful benefit.
+Cognac should remain a native Linux application without requiring Python, Node.js, or another scripting runtime.
+
+---
 
 ## Distribution
 
-Release artifacts currently include:
+Release formats:
 
-- Debian/Ubuntu `.deb`
-- Fedora/RHEL-style `.rpm`
-- Arch Linux package
-- AppImage
-- generic tarball
+| Format | Target |
+|---|---|
+| `.deb` | Debian, Ubuntu, Mint, Pop!_OS and derivatives |
+| `.rpm` | Fedora, openSUSE, RHEL-family distributions |
+| AUR / PKGBUILD | Arch Linux and derivatives |
+| AppImage | Portable Linux distribution |
+| `.tar.gz` | Generic binary release |
 
-Release files are published with SHA-256 checksums.
+The first release targets:
+
+```text
+x86_64
+```
+
+Download a package from the [latest GitHub release](https://github.com/John0n1/cognac/releases/latest), then install it with the matching command:
+
+```bash
+# Debian, Ubuntu, Mint, Pop!_OS
+sudo apt install ./cognac_0.1.0_amd64.deb
+
+# Fedora, openSUSE, RHEL-family
+sudo dnf install ./cognac-0.1.0-1.x86_64.rpm
+
+# Arch Linux and derivatives
+sudo pacman -U ./cognac-bin-0.1.0-1-x86_64.pkg.tar.zst
+
+# Portable AppImage
+chmod +x Cognac-0.1.0-x86_64.AppImage
+./Cognac-0.1.0-x86_64.AppImage --help
+```
+
+The release also includes an AUR-ready `PKGBUILD`, `.SRCINFO`, a generic binary
+archive, and `SHA256SUMS`. To build from source instead:
+
+```bash
+cargo build --release --locked
+sudo install -Dm755 target/release/cognac /usr/local/bin/cognac
+```
+
+---
 
 ## Testing
 
-Useful compatibility tests range from simple applications to increasingly difficult installers:
+Cognac should be tested against increasingly difficult real-world applications.
+
+A useful progression is:
+
+| Stage | Application type | Purpose |
+|---|---|---|
+| 1 | VLC | Basic installer and desktop integration |
+| 2 | Steam | Bootstrap installer, updater, process tracking |
+| 3 | Discord | Chromium/Electron application behavior |
+| 4 | WinSCP | Networking and integration |
+| 5 | .NET application | Runtime provisioning |
+| 6 | Legacy 32-bit application | Architecture and multilib |
+| 7 | DirectX application | DXVK/VKD3D and graphics |
+| 8 | Games | Input, graphics, audio and runtime complexity |
+| 9 | Hardware-integrated software | Graceful degradation and driver handling |
+
+A successful test should mean more than:
 
 ```text
-7-Zip
-Notepad++
-SumatraPDF
-VLC
-WinSCP
-32-bit legacy applications
-.NET-heavy applications
-DirectX games
-multi-stage launchers/updaters
+installer exited successfully
 ```
 
-A clean installation should ideally satisfy all of the following:
+Cognac should verify that the resulting application can be identified, launched, closed, and launched again using the Linux desktop entry it created.
 
-```text
-cognac installer.exe
-→ installer runs
-→ dependencies are supplied automatically
-→ background updater completes
-→ installed application is detected
-→ launcher is created
-→ application opens from the Linux desktop
-→ subsequent launches need no Wine knowledge
-```
+---
 
 ## Project status
 
 Cognac is under active development.
 
-The core architecture is usable, but compatibility coverage and automatic host provisioning are still evolving rapidly.
+The execution-class backbone, managed Wine, managed UMU/Proton, isolated
+cross-runner fallbacks, bounded updater observation, launch probing, strategy
+memory, and v1 registry migration are implemented. Container execution and the
+managed Windows guest/VM lifecycle remain active development work; the planner
+reports them without pretending an unavailable backend is ready.
 
-Expect edge cases, especially with:
+Windows applications vary enormously, and perfect compatibility with every application is not realistic.
 
-- unusual DRM
-- kernel-dependent security software
-- hardware-specific Windows utilities
-- applications requiring complex Windows services
-- vendor-specific launchers
-- applications that explicitly reject virtualization
+The goal is not to claim universal compatibility.
 
-Diagnostic reports and reproducible compatibility failures are useful contributions.
-
-## Philosophy
-
-Cognac is built around one rule:
-
-> If a Windows application can reasonably be made to run on Linux, Cognac should figure out how.
-
-The user should not have to become a Wine expert first.
+The goal is to automatically solve as much compatibility work as reasonably possible and avoid exposing that complexity to the user.
 
 ---
 
-**Cognac — Windows software. Linux machine. No babysitting required.**
+## Philosophy
 
-## Project documents
+Cognac should not feel like a Wine frontend.
 
-- [Contributing](CONTRIBUTING.md)
-- [Contributors](CONTRIBUTORS.md)
-- [Security policy](SECURITY.md)
-- [Third-party notices](THIRD_PARTY_NOTICES.md)
-- [Disclaimer](DISCLAIMER.md)
-- [Code of Conduct](CODE_OF_CONDUCT.md)
-- [Notice](NOTICE.md)
+It should feel like a Windows application installer for Linux.
+
+Users should not need to understand:
+
+```text
+Wine
+Proton
+prefixes
+Winetricks
+DXVK
+VKD3D
+DLL overrides
+Wine architecture
+Windows runtimes
+runner versions
+```
+
+Those are Cognac's problems.
+
+The intended experience remains:
+
+```text
+cognac something.exe
+        |
+        v
+     install
+        |
+        v
+     launch
+        |
+        v
+      done
+```
+
+> **If a Windows application can reasonably be made to run on Linux, Cognac should figure out how.**
+
+<p align="center">
+  <strong>Cognac — Windows software. Linux machine. No babysitting required.</strong>
+</p>
