@@ -227,11 +227,15 @@ mod tests {
         let prefix = Path::new("/tmp/test_prefix");
         assert_eq!(
             windows_path(prefix, r#"C:\Program Files\App\app.exe"#),
-            Some(PathBuf::from("/tmp/test_prefix/drive_c/Program Files/App/app.exe"))
+            Some(PathBuf::from(
+                "/tmp/test_prefix/drive_c/Program Files/App/app.exe"
+            ))
         );
         assert_eq!(
             windows_path(prefix, r#"c:\\Program Files\\App\\app.exe"#),
-            Some(PathBuf::from("/tmp/test_prefix/drive_c/Program Files/App/app.exe"))
+            Some(PathBuf::from(
+                "/tmp/test_prefix/drive_c/Program Files/App/app.exe"
+            ))
         );
         assert_eq!(
             windows_path(prefix, r#""C:\App\app.exe""#),
@@ -241,9 +245,6 @@ mod tests {
             windows_path(prefix, r#"\App\app.exe"#),
             Some(PathBuf::from("/tmp/test_prefix/drive_c/App/app.exe"))
         );
-        assert_eq!(
-            windows_path(prefix, r#"..\..\etc\passwd"#),
-            None
-        );
+        assert_eq!(windows_path(prefix, r#"..\..\etc\passwd"#), None);
     }
 }

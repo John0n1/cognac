@@ -2,6 +2,17 @@ use crate::model::{Failure, Repair};
 use regex::Regex;
 
 pub fn classify(output: &str, status: Option<i32>) -> Failure {
+    if output
+        .to_ascii_lowercase()
+        .contains("tdk library initialization failed")
+    {
+        return Failure {
+            category: "firmware-tool-initialization",
+            summary: "The firmware utility failed to initialize its TDK library. The message alone does not identify the missing dependency; installing the wrapper does not verify firmware access. Use a model-compatible native or vendor bootable update path".into(),
+            retryable: false,
+            repair: None,
+        };
+    }
     let rules = [
         (
             r"(?i)(msvcp\d+|vcruntime\d+)\.dll.*(not found|missing)",
@@ -96,6 +107,13 @@ pub fn classify(output: &str, status: Option<i32>) -> Failure {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn tdk_failure_is_terminal_even_if_wrapper_exits_successfully() {
+        let failure = classify("ERROR 255 - TDK library initialization failed!", Some(0));
+        assert_eq!(failure.category, "firmware-tool-initialization");
+        assert!(!failure.retryable);
+        assert!(failure.repair.is_none());
+    }
     #[test]
     fn finds_vcrun() {
         assert_eq!(

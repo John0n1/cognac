@@ -1,6 +1,6 @@
 [package]
 name = "cognac"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = "An intelligent Windows application installer for Linux"
 license = "MIT"
@@ -40,6 +40,8 @@ assets = [
     { source = "target/release/cognac", dest = "/usr/bin/cognac", mode = "755" },
     { source = "LICENSE", dest = "/usr/share/licenses/cognac/LICENSE", mode = "644", doc = true },
     { source = "README.md", dest = "/usr/share/doc/cognac/README.md", mode = "644", doc = true },
+    { source = "CHANGELOG.md", dest = "/usr/share/doc/cognac/CHANGELOG.md", mode = "644", doc = true },
+    { source = "docs/*.md", dest = "/usr/share/doc/cognac/", mode = "644", doc = true },
 ]
 
 [package.metadata.generate-rpm.requires]

@@ -2,7 +2,33 @@
 
 All notable changes to Cognac will be documented in this file.
 
-## Unreleased
+## 0.2.0 - 2026-10-06
+
+### Hardware analysis and native firmware operations
+
+- Add manufacturer-independent `inspect-hardware` analysis of EXE, DLL and SYS
+  imports, embedded PE resources, kernel dependencies and ASCII/UTF-16 device hints.
+- Export embedded driver resources under SHA-256 filenames without executing them;
+  bound resource traversal, detect cycles and preserve analysis errors.
+- Index retained COFF function names, RVAs and file offsets for reverse engineering.
+- Add `decode-ioctl` for the documented Windows CTL_CODE fields; private command
+  semantics are not inferred or replayed.
+- Feed embedded physical-memory and port-I/O dependencies into installation
+  planning, preventing unsupported Wine/VM fallback across manufacturers.
+- Add read-only `hardware-plan` review of an explicitly selected trusted fwupd
+  alternative, keeping the analyzed EXE separate from the native release payload.
+- Add `firmware-devices`, journaled `flash-firmware` and post-update
+  `firmware-status`, with exact device/version targeting and no automatic reboot.
+- Add nonexecuting Inno firmware extraction, capsule-header/hash inspection and
+  read-only Phoenix ACPI interface discovery.
+- Include an experimental Phoenix SCT EFI implementation and offline signature
+  inspection tools. One exact platform/image BIOS update was physically verified;
+  this remains a restricted proof of concept, not universal raw flashing support.
+- Document unsupported protocols, static-analysis coverage and native adapter
+  requirements. Verify with 64 Rust/CLI tests, Clippy, architecture fixtures and
+  read-only inspection of the real updater package.
+
+### Execution and installation improvements
 
 - Replace Wine-only runner selection with execution-class planning.
 - Add managed UMU-Proton and GE-Proton strategies with verified self-bootstrap.

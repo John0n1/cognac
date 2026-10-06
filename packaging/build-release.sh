@@ -6,12 +6,14 @@ cd "$ROOT"
 
 VERSION=$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)
 ARCH=$(uname -m)
+SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-$(date -u +%s)}
+export SOURCE_DATE_EPOCH
 if [[ "$ARCH" != "x86_64" ]]; then
   echo "release packaging currently supports x86_64 hosts only" >&2
   exit 1
 fi
 
-for command in cargo dpkg-deb makepkg sha256sum tar; do
+for command in cargo dpkg-deb makepkg sha256sum tar curl bsdtar zstd; do
   command -v "$command" >/dev/null || {
     echo "missing packaging command: $command" >&2
     exit 1
@@ -23,16 +25,18 @@ mkdir -p "$DIST"
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/cognac-package.XXXXXXXX")
 trap 'rm -rf -- "$WORK"' EXIT
 
-cargo build --release --locked
-BINARY="$ROOT/target/release/cognac"
+BUILD_TARGET=${COGNAC_BUILD_TARGET:-x86_64-unknown-linux-musl}
+cargo build --release --locked --target "$BUILD_TARGET"
+BINARY="$ROOT/target/$BUILD_TARGET/release/cognac"
 
 # Generic portable binary archive.
 PORTABLE="cognac-${VERSION}-x86_64"
 mkdir -p "$WORK/$PORTABLE/bin"
 install -m755 "$BINARY" "$WORK/$PORTABLE/bin/cognac"
 install -m644 LICENSE README.md CHANGELOG.md "$WORK/$PORTABLE/"
+cp -R docs "$WORK/$PORTABLE/docs"
 tar --sort=name --owner=0 --group=0 --numeric-owner \
-  --mtime="UTC 2026-08-26" -C "$WORK" -czf "$DIST/$PORTABLE.tar.gz" "$PORTABLE"
+  --mtime="@$SOURCE_DATE_EPOCH" -C "$WORK" -czf "$DIST/$PORTABLE.tar.gz" "$PORTABLE"
 
 # Debian-family package.
 DEBROOT="$WORK/deb"
@@ -41,6 +45,7 @@ mkdir -p "$DEBROOT/DEBIAN" "$DEBROOT/usr/bin" \
 install -m644 packaging/debian/control "$DEBROOT/DEBIAN/control"
 install -m755 "$BINARY" "$DEBROOT/usr/bin/cognac"
 install -m644 README.md CHANGELOG.md "$DEBROOT/usr/share/doc/cognac/"
+cp -R docs "$DEBROOT/usr/share/doc/cognac/"
 install -m644 LICENSE "$DEBROOT/usr/share/licenses/cognac/LICENSE"
 dpkg-deb --root-owner-group --build "$DEBROOT" "$DIST/cognac_${VERSION}_amd64.deb"
 
@@ -49,9 +54,7 @@ if ! cargo generate-rpm --version >/dev/null 2>&1; then
   echo "cargo-generate-rpm is required: cargo install cargo-generate-rpm" >&2
   exit 1
 fi
-cargo generate-rpm
-install -m644 "$ROOT/target/generate-rpm/cognac-${VERSION}-1.x86_64.rpm" \
-  "$DIST/cognac-${VERSION}-1.x86_64.rpm"
+cargo generate-rpm --target "$BUILD_TARGET" --output "$DIST/cognac-${VERSION}-1.x86_64.rpm"
 
 # Portable AppImage.
 APPDIR="$WORK/Cognac.AppDir"
@@ -73,9 +76,10 @@ if [[ ! -x "$APPIMAGETOOL" ]]; then
   mkdir -p "$(dirname -- "$APPIMAGETOOL")"
   curl --fail --location --retry 3 \
     --output "$APPIMAGETOOL" \
-    https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+    https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
   chmod +x "$APPIMAGETOOL"
 fi
+echo "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  $APPIMAGETOOL" | sha256sum --check --status
 ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
   "$APPDIR" "$DIST/Cognac-${VERSION}-x86_64.AppImage"
 
@@ -83,12 +87,18 @@ ARCH=x86_64 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" \
 # local copy of the release tarball so it can be verified before publishing.
 ARCHWORK="$WORK/arch"
 mkdir -p "$ARCHWORK"
+ARCHIVE_SHA=$(sha256sum "$DIST/$PORTABLE.tar.gz" | cut -d' ' -f1)
+sed -i "s/^pkgver=.*/pkgver=$VERSION/; s/^sha256sums=.*/sha256sums=('$ARCHIVE_SHA')/" packaging/arch/PKGBUILD
+(cd packaging/arch && makepkg --printsrcinfo > .SRCINFO)
 install -m644 packaging/arch/PKGBUILD "$ARCHWORK/PKGBUILD"
 install -m644 "$DIST/$PORTABLE.tar.gz" "$ARCHWORK/$PORTABLE.tar.gz"
 sed -i "s|^source=.*|source=(\"$PORTABLE.tar.gz\")|" "$ARCHWORK/PKGBUILD"
+# Debian's makepkg defaults to xz; the published Arch format is explicitly zstd.
+cp /etc/makepkg.conf "$WORK/makepkg.conf"
+printf "\nPKGEXT='.pkg.tar.zst'\n" >> "$WORK/makepkg.conf"
 (
   cd "$ARCHWORK"
-  makepkg --clean --cleanbuild --force --nodeps --noconfirm
+  makepkg --config "$WORK/makepkg.conf" --clean --cleanbuild --force --nodeps --noconfirm
 )
 install -m644 "$ARCHWORK/cognac-bin-${VERSION}-1-x86_64.pkg.tar.zst" "$DIST/"
 install -m644 packaging/arch/PKGBUILD "$DIST/PKGBUILD"

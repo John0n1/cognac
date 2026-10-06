@@ -117,7 +117,59 @@ pub fn analyze(path: &Path) -> Result<ExecutableInfo> {
     if lower.contains("electron") || lower.contains("chrome_elf.dll") {
         indicators.push("electron".into());
     }
-    let trust = analyze_trust(&lower, &imports);
+    let fallback_name = clean_filename(path);
+    let product_name = metadata_value(&utf16, "ProductName").or(Some(fallback_name));
+    let publisher = metadata_value(&utf16, "CompanyName");
+    let host_firmware = detects_host_firmware(product_name.as_deref(), &lower);
+    let mut trust = analyze_trust(&lower, &imports);
+    // Discover actual imports and embedded kernel images across vendors.
+    let mut dependencies =
+        crate::hardware::imported_capabilities(pe.imports.iter().map(|i| i.name.as_ref()));
+    match crate::hardware::embedded_dependencies(&bytes, &pe) {
+        Ok((kernel, embedded)) => {
+            trust.kernel_driver_likely |= kernel;
+            if kernel {
+                trust
+                    .evidence
+                    .push("embedded native-subsystem PE imports a Windows kernel library".into());
+            }
+            dependencies.extend(embedded);
+        }
+        Err(error) => trust
+            .evidence
+            .push(format!("embedded hardware analysis incomplete: {error:#}")),
+    }
+    for evidence in dependencies {
+        use crate::hardware::Capability;
+        match evidence.capability {
+            Capability::DriverLoading => trust.kernel_driver_likely = true,
+            Capability::PhysicalMemory | Capability::PortIo => {
+                trust.direct_hardware_access_likely = true;
+                if !indicators
+                    .iter()
+                    .any(|i| i == "native-hardware-protocol-required")
+                {
+                    indicators.push("native-hardware-protocol-required".into());
+                }
+            }
+            Capability::FirmwareVariables => trust.direct_hardware_access_likely = true,
+            // An IOCTL, HID or USB import by itself does not prove privileged
+            // access: ordinary user-space applications also use these APIs.
+            Capability::DeviceIoctl | Capability::Usb | Capability::Hid => {}
+        }
+        trust.evidence.push(format!(
+            "hardware import dependency {:?}: {}",
+            evidence.capability,
+            evidence.imported_symbols.join(", ")
+        ));
+    }
+    if host_firmware {
+        trust.direct_hardware_access_likely = true;
+        trust.evidence.push(
+            "host BIOS/UEFI updater identity detected; physical firmware access is required".into(),
+        );
+        indicators.push("host-firmware-update".into());
+    }
     if trust.elevation_likely {
         indicators.push("driver-or-elevation".into());
     }
@@ -131,11 +183,12 @@ pub fn analyze(path: &Path) -> Result<ExecutableInfo> {
         indicators.push("anti-cheat".into());
     }
 
-    let fallback_name = clean_filename(path);
-    let product_name = metadata_value(&utf16, "ProductName").or(Some(fallback_name));
-    let publisher = metadata_value(&utf16, "CompanyName");
     let sha256 = hex::encode(Sha256::digest(&bytes));
-    let application_class = classify_application(&lower, &frameworks, &indicators, &trust);
+    let application_class = if host_firmware {
+        ApplicationClass::FirmwareUpdate
+    } else {
+        classify_application(&lower, &frameworks, &indicators, &trust)
+    };
     Ok(ExecutableInfo {
         path: path.canonicalize().unwrap_or_else(|_| path.to_path_buf()),
         sha256,
@@ -151,6 +204,40 @@ pub fn analyze(path: &Path) -> Result<ExecutableInfo> {
         application_class,
         trust,
     })
+}
+
+fn detects_host_firmware(product: Option<&str>, lower: &str) -> bool {
+    let product = product.unwrap_or_default().to_ascii_lowercase();
+    contains_any(
+        &product,
+        &[
+            "bios update",
+            "bios flash",
+            "uefi firmware update",
+            "system firmware update",
+        ],
+    ) || contains_any(
+        lower,
+        &["phoenix sct flash", "sctwinflash", "insydeflash", "afuwin"],
+    ) && contains_any(lower, &["bios", "uefi", "tdk library initialization"])
+}
+
+pub fn ensure_application_execution(info: &ExecutableInfo) -> Result<()> {
+    if info.application_class == ApplicationClass::FirmwareUpdate {
+        bail!(
+            "This updater targets the physical computer's BIOS/UEFI. Wine, Proton, and a Windows VM cannot provide a supported host firmware update path. Use `cognac inspect-firmware <EXE> --extract-to <NEW_DIRECTORY>` to inspect the package without executing it; flashing requires a model-compatible native or vendor bootable updater. Application snapshots cannot restore motherboard firmware."
+        );
+    }
+    if info
+        .indicators
+        .iter()
+        .any(|i| i == "native-hardware-protocol-required")
+    {
+        bail!(
+            "This package contains physical-memory or port-I/O dependencies. Cognac has no verified native protocol adapter for them. Inspect using `cognac inspect-hardware <EXE>`; a generic Windows VM cannot establish access to the intended physical device."
+        );
+    }
+    Ok(())
 }
 
 fn string_windows(bytes: &[u8]) -> Vec<&[u8]> {
@@ -397,6 +484,26 @@ fn printable_strings(bytes: &[u8], wide: bool) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn distinguishes_host_flashers_from_general_firmware_mentions() {
+        assert!(detects_host_firmware(
+            Some("Lenovo BIOS Update Utility"),
+            ""
+        ));
+        assert!(detects_host_firmware(
+            None,
+            "phoenix sct flash tdk library initialization failed"
+        ));
+        assert!(!detects_host_firmware(
+            Some("USB Firmware Update"),
+            "usb controller firmware update"
+        ));
+        assert!(!detects_host_firmware(
+            Some("System Information"),
+            "bios version uefi supported"
+        ));
+        assert!(!detects_host_firmware(None, "bios update instructions"));
+    }
     #[test]
     fn names_are_cleaned() {
         assert_eq!(

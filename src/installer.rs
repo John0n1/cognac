@@ -54,6 +54,7 @@ pub fn prepare(paths: &CognacPaths, executable: &Path) -> Result<PreparedInstall
 pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<InstalledApp> {
     paths.ensure()?;
     let prepared = prepare(paths, executable)?;
+    analyzer::ensure_application_execution(&prepared.info)?;
     let mut registry = AppRegistry::load(paths)?;
     let existing = registry
         .values()
@@ -66,6 +67,7 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
             &executable_inventory(&app.prefix),
         ) && candidate != app.executable
         {
+            analyzer::ensure_application_execution(&analyzer::analyze(&candidate)?)?;
             app.executable = candidate;
             app.name = detected_name(&app.executable, &app.name);
             app.quality = ResultQuality::Unverified;
@@ -75,6 +77,7 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
             registry.insert(app.clone());
             registry.save(paths)?;
         }
+        analyzer::ensure_application_execution(&analyzer::analyze(&app.executable)?)?;
         return Ok(app);
     }
     if prepared.info.architecture == crate::model::Architecture::Arm64 {
@@ -182,9 +185,20 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
                     break;
                 }
             };
+            let failure = diagnostics::classify(&outcome.output, outcome.status);
+            if !failure.retryable {
+                append_diagnostic(&log, attempt, strategy, &failure)?;
+                memory.record_failure(&prepared.info, strategy.class, &strategy.backend);
+                memory.save(paths)?;
+                bail!("{}", failure.summary);
+            }
             if matches!(outcome.status, Some(0 | 194)) {
                 let observation = observer::observe_install(environment.prefix(), &log, &progress)?;
                 append_observation(&log, strategy, &observation)?;
+                let after = executable_inventory(environment.prefix());
+                let installed = discover_installed(environment.prefix(), &before, &after)
+                    .unwrap_or_else(|| executable.to_path_buf());
+                analyzer::ensure_application_execution(&analyzer::analyze(&installed)?)?;
                 if observation.kernel_driver_activity
                     && matches!(
                         strategy.class,
@@ -198,9 +212,6 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
                     );
                     break;
                 }
-                let after = executable_inventory(environment.prefix());
-                let installed = discover_installed(environment.prefix(), &before, &after)
-                    .unwrap_or_else(|| executable.to_path_buf());
                 let mut limitations = Vec::new();
                 if installed == executable {
                     limitations.push("No installed executable was detected; Cognac will launch the supplied executable directly".into());
@@ -272,7 +283,6 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
                 return register(paths, app, &progress);
             }
 
-            let failure = diagnostics::classify(&outcome.output, outcome.status);
             append_diagnostic(&log, attempt, strategy, &failure)?;
             last_failure = Some(failure.summary.clone());
             if !failure.retryable || attempt == ATTEMPTS_PER_STRATEGY {
@@ -313,30 +323,35 @@ pub fn install(paths: &CognacPaths, executable: &Path, quiet: bool) -> Result<In
         };
         let prefix = strategy_prefix(paths, &app_id, &strategy);
         let log = paths.logs().join(format!("{app_id}.log"));
-        let mut environment = ExecutionEnvironment::provision(paths, &strategy, prefix, &progress)
+        let environment = ExecutionEnvironment::provision(paths, &strategy, prefix, &progress)
             .context("failed to provision a virtual machine environment")?;
         environment
             .initialize(&prepared.plan, &progress, &log)
             .context("failed to initialize a virtual machine environment")?;
         let before = executable_inventory(environment.prefix());
-        let snapshot = environment.snapshot(
-            &format!("{}-{}", app_id, slugify(&strategy.backend)),
-            1,
-        )?;
-        progress.update("Pouring the installer into the virtual machine...", Some(92));
+        let snapshot =
+            environment.snapshot(&format!("{}-{}", app_id, slugify(&strategy.backend)), 1)?;
+        progress.update(
+            "Pouring the installer into the virtual machine...",
+            Some(92),
+        );
         let runtime_env = runtime_environment(&prepared.plan, strategy.class);
         let outcome = environment
             .run(executable, &[], &runtime_env, &log)
             .context("failed to run the installer in the virtual machine")?;
-        if !matches!(outcome.status, Some(0 | 194)) {
-            let failure = diagnostics::classify(&outcome.output, outcome.status);
+        let failure = diagnostics::classify(&outcome.output, outcome.status);
+        if !failure.retryable || !matches!(outcome.status, Some(0 | 194)) {
             append_diagnostic(&log, 1, &strategy, &failure)
                 .context("failed to log the virtual machine installation failure")?;
-            bail!("installer failed in the virtual machine: {}", failure.summary);
+            bail!(
+                "installer failed in the virtual machine: {}",
+                failure.summary
+            );
         }
         let after = executable_inventory(environment.prefix());
         let installed = discover_installed(environment.prefix(), &before, &after)
             .unwrap_or_else(|| executable.to_path_buf());
+        analyzer::ensure_application_execution(&analyzer::analyze(&installed)?)?;
         let launch_environment = persisted_environment(
             &environment,
             runtime_environment(&prepared.plan, strategy.class),
@@ -394,6 +409,7 @@ fn recover_interrupted(
     ) else {
         return Ok(None);
     };
+    analyzer::ensure_application_execution(&analyzer::analyze(&installed)?)?;
     progress.update("Recovering a completed installation...", Some(90));
     let quality = ResultQuality::FunctionalWithLimitations;
     let app = InstalledApp {

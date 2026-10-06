@@ -36,6 +36,56 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Review a trusted native fwupd alternative to an analyzed Windows package
+    HardwarePlan {
+        executable: PathBuf,
+        #[arg(long)]
+        payload_dir: Option<PathBuf>,
+        #[arg(long)]
+        device: String,
+        #[arg(long)]
+        version: String,
+    },
+    /// Analyze hardware imports and embedded drivers without executing the package
+    InspectHardware {
+        executable: PathBuf,
+        /// Also analyze extracted EXE, DLL and SYS payloads
+        #[arg(long)]
+        payload_dir: Option<PathBuf>,
+        /// Export embedded PE resources to a new directory using SHA-256 filenames
+        #[arg(long)]
+        export_embedded: Option<PathBuf>,
+    },
+    /// Decode Windows CTL_CODE fields without guessing the driver's protocol
+    DecodeIoctl { value: String },
+    /// Discover Phoenix SCT ACPI interfaces without issuing hardware commands
+    ProbePhoenixFirmware {
+        #[arg(long, default_value = "/sys/firmware/acpi/tables")]
+        tables_dir: PathBuf,
+    },
+    /// List native fwupd devices and their exact identifiers
+    FirmwareDevices,
+    /// Install an available trusted fwupd upgrade on one selected physical device
+    FlashFirmware {
+        #[arg(long)]
+        device: String,
+        #[arg(long)]
+        version: String,
+        /// Authorize firmware submission; no reboot is performed by Cognac
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Verify the selected device's version against its recorded firmware transaction
+    FirmwareStatus {
+        #[arg(long)]
+        device: String,
+    },
+    /// Extract a firmware package and inspect capsules without running its updater
+    InspectFirmware {
+        executable: PathBuf,
+        #[arg(long, value_name = "NEW_DIRECTORY")]
+        extract_to: PathBuf,
+    },
     /// List applications managed by Cognac
     List,
     /// Launch an installed application
@@ -78,6 +128,171 @@ fn run() -> Result<()> {
     let cli = Cli::parse();
     let paths = CognacPaths::discover()?;
     match (cli.command.as_ref(), cli.executable.as_ref()) {
+        (
+            Some(Commands::HardwarePlan {
+                executable,
+                payload_dir,
+                device,
+                version,
+            }),
+            None,
+        ) => {
+            let plan = cognac::hardware::plan_firmware(
+                executable,
+                payload_dir.as_deref(),
+                device,
+                version,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&plan)?);
+            Ok(())
+        }
+        (
+            Some(Commands::InspectHardware {
+                executable,
+                payload_dir,
+                export_embedded,
+            }),
+            None,
+        ) => {
+            if cli.dry_run && export_embedded.is_some() {
+                bail!("--export-embedded writes files; omit it for read-only analysis");
+            }
+            let report = cognac::hardware::inspect(
+                executable,
+                payload_dir.as_deref(),
+                export_embedded.as_deref(),
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        }
+        (Some(Commands::DecodeIoctl { value }), None) => {
+            let value = if let Some(hex) = value
+                .strip_prefix("0x")
+                .or_else(|| value.strip_prefix("0X"))
+            {
+                u32::from_str_radix(hex, 16)
+            } else {
+                value.parse::<u32>()
+            }
+            .context("IOCTL must be a 32-bit decimal or 0x-prefixed hexadecimal value")?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&cognac::hardware::decode_ioctl(value))?
+            );
+            Ok(())
+        }
+        (Some(Commands::ProbePhoenixFirmware { tables_dir }), None) => {
+            let discovery = cognac::phoenix::discover(tables_dir)?;
+            println!("{}", serde_json::to_string_pretty(&discovery)?);
+            Ok(())
+        }
+        (Some(Commands::FirmwareDevices), None) => {
+            let devices = cognac::firmware_flash::devices()?;
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&devices)?);
+            } else {
+                for device in devices {
+                    println!(
+                        "{}  {}  version {}",
+                        device.id,
+                        device.name,
+                        device.version.as_deref().unwrap_or("unknown")
+                    );
+                }
+            }
+            Ok(())
+        }
+        (
+            Some(Commands::FlashFirmware {
+                device,
+                version,
+                yes,
+            }),
+            None,
+        ) => {
+            if cli.dry_run {
+                let plan = cognac::firmware_flash::plan(device, version)?;
+                println!("{}", serde_json::to_string_pretty(&plan)?);
+                return Ok(());
+            }
+            if !yes {
+                bail!(
+                    "use --dry-run to review the device and release, then --yes to authorize firmware submission"
+                );
+            }
+            let transaction = cognac::firmware_flash::flash(&paths, device, version)?;
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&transaction)?);
+            } else {
+                println!(
+                    "Firmware transaction: {:?}. No automatic reboot.\n{}",
+                    transaction.phase, transaction.output
+                );
+                println!("Verify using: cognac firmware-status --device {device}");
+            }
+            Ok(())
+        }
+        (Some(Commands::FirmwareStatus { device }), None) => {
+            let status = cognac::firmware_flash::status(&paths, device)?;
+            println!("{}", serde_json::to_string_pretty(&status)?);
+            Ok(())
+        }
+        (
+            Some(Commands::InspectFirmware {
+                executable,
+                extract_to,
+            }),
+            None,
+        ) => {
+            if cli.dry_run {
+                bail!(
+                    "inspect-firmware extracts files; use `cognac <EXE> --dry-run` for analysis without extraction"
+                );
+            }
+            let report = cognac::firmware::inspect(executable, extract_to)?;
+            if cli.json {
+                println!("{}", serde_json::to_string_pretty(&report)?);
+            } else {
+                println!(
+                    "Package extracted without executing it: {}",
+                    report.extraction_directory.display()
+                );
+                println!(
+                    "Host: {} {} BIOS {}",
+                    report.host.vendor.as_deref().unwrap_or("unknown"),
+                    report.host.product.as_deref().unwrap_or("unknown"),
+                    report.host.bios_version.as_deref().unwrap_or("unknown")
+                );
+                println!("{}", report.host.esrt_status);
+                for executable in report.payload_executables {
+                    println!(
+                        "Payload: {} ({})",
+                        executable.path.display(),
+                        executable.application_class
+                    );
+                }
+                for error in report.executable_errors {
+                    println!("Executable inspection failed: {error}");
+                }
+                for capsule in report.capsules {
+                    println!(
+                        "{}: {} bytes, GUID {}, header bounds valid: {}, SHA-256 {}",
+                        capsule.path.display(),
+                        capsule.size,
+                        capsule.capsule_guid,
+                        capsule.header_bounds_valid,
+                        capsule.sha256
+                    );
+                }
+                for error in report.capsule_errors {
+                    println!("Capsule inspection failed: {error}");
+                }
+                for limitation in report.limitations {
+                    println!("  • {limitation}");
+                }
+            }
+            Ok(())
+        }
         (None, Some(executable)) => install_command(&paths, executable, &cli),
         (Some(Commands::List), None) => list_command(&paths, cli.json),
         (Some(Commands::Run { app, arguments }), None) => {
@@ -221,6 +436,7 @@ fn list_command(paths: &CognacPaths, json: bool) -> Result<()> {
 fn run_command(paths: &CognacPaths, query: &str, arguments: &[String], quiet: bool) -> Result<()> {
     let registry = AppRegistry::load(paths)?;
     let app = registry.get(query)?;
+    cognac::analyzer::ensure_application_execution(&cognac::analyzer::analyze(&app.executable)?)?;
     let environment = ExecutionEnvironment::from_installed(
         paths,
         app.execution_class,

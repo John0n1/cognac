@@ -9,3 +9,9 @@
 .idea/
 .vscode/
 .DS_Store
+
+# Experimental EFI build artifacts; retain source and tests only.
+/tools/**/*.efi
+/tools/**/*.o
+/tools/**/*.so
+/tools/**/__pycache__/

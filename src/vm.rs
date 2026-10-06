@@ -90,10 +90,7 @@ impl VmEnvironment {
     pub fn base_environment(&self) -> BTreeMap<String, String> {
         BTreeMap::from([
             ("COGNAC_VM_DOMAIN".into(), self.config.domain.clone()),
-            (
-                "COGNAC_VM_URI".into(),
-                self.config.connection_uri.clone(),
-            ),
+            ("COGNAC_VM_URI".into(), self.config.connection_uri.clone()),
         ])
     }
 
@@ -119,7 +116,10 @@ impl VmEnvironment {
         self.ensure_ready()?;
         let guest_executable = self.resolve_guest_executable(executable)?;
         let outcome = self.guest_exec_wait(&guest_executable, args)?;
-        append_log(log, &format!("[cognac-vm] {guest_executable}\n{}", outcome.output))?;
+        append_log(
+            log,
+            &format!("[cognac-vm] {guest_executable}\n{}", outcome.output),
+        )?;
         self.sync_inventory()?;
         if matches!(outcome.status, Some(0 | 194)) {
             self.discard_active_snapshot()?;
@@ -143,7 +143,9 @@ impl VmEnvironment {
         let pid = self.guest_exec_start(&guest_executable, args, false)?;
         append_log(
             log,
-            &format!("[cognac-vm] launched {guest_executable} through QEMU Guest Agent (pid {pid})"),
+            &format!(
+                "[cognac-vm] launched {guest_executable} through QEMU Guest Agent (pid {pid})"
+            ),
         )?;
         Ok(())
     }
@@ -326,9 +328,9 @@ impl VmEnvironment {
             .and_then(|value| value.to_str())
             .filter(|value| {
                 !value.is_empty()
-                    && value
-                        .chars()
-                        .all(|character| character.is_ascii_alphanumeric() || "-_. ".contains(character))
+                    && value.chars().all(|character| {
+                        character.is_ascii_alphanumeric() || "-_. ".contains(character)
+                    })
             })
             .unwrap_or("installer.exe");
         let staging = r"C:\ProgramData\Cognac\staging";
@@ -358,7 +360,10 @@ impl VmEnvironment {
                     .and_then(Value::as_u64)
                     .unwrap_or_default();
                 if written != chunk.len() as u64 {
-                    bail!("QEMU Guest Agent wrote only {written} of {} bytes", chunk.len());
+                    bail!(
+                        "QEMU Guest Agent wrote only {written} of {} bytes",
+                        chunk.len()
+                    );
                 }
             }
             Ok(())
@@ -380,7 +385,11 @@ impl VmEnvironment {
             fs::remove_dir_all(&drive)?;
         }
         fs::create_dir_all(&drive)?;
-        for line in inventory.lines().map(str::trim).filter(|line| !line.is_empty()) {
+        for line in inventory
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+        {
             let Some(relative) = windows_c_relative(line) else {
                 continue;
             };
@@ -681,7 +690,10 @@ fn append_log(path: &Path, message: &str) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let mut file = fs::OpenOptions::new().create(true).append(true).open(path)?;
+    let mut file = fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)?;
     writeln!(file, "{message}")?;
     Ok(())
 }

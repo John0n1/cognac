@@ -120,6 +120,35 @@ fn select_execution(
     learned: Option<&StrategyRecord>,
     wine_channel: &str,
 ) -> (ExecutionStrategy, Vec<ExecutionStrategy>) {
+    if info
+        .indicators
+        .iter()
+        .any(|i| i == "native-hardware-protocol-required")
+        && info.application_class != ApplicationClass::FirmwareUpdate
+    {
+        return (ExecutionStrategy {
+            class: ExecutionClass::Restricted,
+            backend: "native-hardware-protocol-required".into(),
+            availability: StrategyAvailability::Blocked,
+            score: 0,
+            reasons: vec!["A bundled image imports physical-memory or port-I/O APIs; a compatibility runner or generic VM cannot establish the intended physical-device semantics.".into()],
+            blockers: vec!["No verified native protocol adapter; use `cognac inspect-hardware` to recover dependencies.".into()],
+        }, Vec::new());
+    }
+    if info.application_class == ApplicationClass::FirmwareUpdate {
+        return (ExecutionStrategy {
+            class: ExecutionClass::Restricted,
+            backend: "native-firmware-required".into(),
+            availability: StrategyAvailability::Blocked,
+            score: 0,
+            reasons: vec![
+                "This updater targets physical host BIOS/UEFI; compatibility runners cannot supply a supported firmware write path".into(),
+                "A Windows guest's firmware is separate from the physical motherboard, and guest snapshots cannot undo a host flash".into(),
+                "Inspect the package with `cognac inspect-firmware <EXE> --extract-to <NEW_DIRECTORY>`; use a verified model-compatible native or vendor bootable updater for flashing".into(),
+            ],
+            blockers: vec!["This Windows updater has no verified native protocol adapter. The separate fwupd backend requires an explicitly selected supported device and trusted release; inspect dependencies with `cognac inspect-hardware`.".into()],
+        }, Vec::new());
+    }
     let requires_kernel = info.trust.requires_windows_kernel();
     let virtualization_sensitive = info.trust.anti_cheat.iter().any(|anti_cheat| {
         matches!(
@@ -391,6 +420,48 @@ mod tests {
             capabilities: HostCapabilities::default(),
             issues: vec![],
         }
+    }
+
+    #[test]
+    fn host_firmware_cannot_be_routed_to_a_vm_or_a_learned_runner() {
+        let mut host = host();
+        host.capabilities.windows_vm_configured = true;
+        let info = executable(ApplicationClass::FirmwareUpdate);
+        let learned = StrategyRecord {
+            sha256: info.sha256.clone(),
+            identity: "Lenovo".into(),
+            execution_class: ExecutionClass::Wine,
+            backend: "staging".into(),
+            successes: 100,
+            failures: 0,
+            last_result: crate::model::ResultQuality::Functional,
+            last_used: "".into(),
+        };
+        let profile: Profile = serde_json::from_value(serde_json::json!({
+            "id": "force-vm", "execution_class": "virtual-machine"
+        }))
+        .unwrap();
+        let plan = build(&info, &host, Some(&profile), Some(&learned));
+        assert_eq!(plan.execution.class, ExecutionClass::Restricted);
+        assert_eq!(plan.execution.availability, StrategyAvailability::Blocked);
+        assert!(plan.execution_fallbacks.is_empty());
+        assert!(crate::analyzer::ensure_application_execution(&info).is_err());
+    }
+
+    #[test]
+    fn physical_access_dependencies_cannot_be_overridden_by_a_vm_profile() {
+        let mut info = executable(ApplicationClass::DriverPackage);
+        info.indicators
+            .push("native-hardware-protocol-required".into());
+        let mut host = host();
+        host.capabilities.windows_vm_configured = true;
+        let profile: Profile = serde_json::from_value(serde_json::json!({
+            "id": "force-vm", "execution_class": "virtual-machine"
+        }))
+        .unwrap();
+        let plan = build(&info, &host, Some(&profile), None);
+        assert_eq!(plan.execution.class, ExecutionClass::Restricted);
+        assert!(plan.execution_fallbacks.is_empty());
     }
 
     #[test]

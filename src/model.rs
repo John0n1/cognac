@@ -10,6 +10,7 @@ pub enum ApplicationClass {
     Legacy,
     SystemUtility,
     DriverPackage,
+    FirmwareUpdate,
     #[default]
     General,
 }
@@ -23,6 +24,7 @@ impl std::fmt::Display for ApplicationClass {
             Self::Legacy => "legacy",
             Self::SystemUtility => "system utility",
             Self::DriverPackage => "driver package",
+            Self::FirmwareUpdate => "host firmware update",
             Self::General => "general application",
         })
     }

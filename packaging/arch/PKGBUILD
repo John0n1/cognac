@@ -1,6 +1,6 @@
 # Maintainer: John Hauger Mitander <john@mitander.io>
 pkgname=cognac-bin
-pkgver=0.1.0
+pkgver=0.2.0
 pkgrel=1
 pkgdesc='Intelligent Windows application installer for Linux'
 arch=('x86_64')
@@ -9,9 +9,9 @@ license=('MIT')
 depends=('glibc' 'gcc-libs' 'coreutils' 'tar' 'xz' 'python>=3.10')
 provides=('cognac')
 conflicts=('cognac')
-options=('!debug')
+options=('!debug' '!strip')
 source=("cognac-${pkgver}-x86_64.tar.gz::${url}/releases/download/v${pkgver}/cognac-${pkgver}-x86_64.tar.gz")
-sha256sums=('ebc360ce0c2dc959e68c5ce033183147529e92ff1c9fbafc2a93a726b263baa5')
+sha256sums=('5e5b3885a283a2e3d3e1c76f5c6508f7101c107e449bff9534b04b0ae3c1573a')
 
 package() {
   install -Dm755 "${srcdir}/cognac-${pkgver}-x86_64/bin/cognac" \
@@ -20,4 +20,7 @@ package() {
     "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
   install -Dm644 "${srcdir}/cognac-${pkgver}-x86_64/README.md" \
     "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+  install -Dm644 "${srcdir}/cognac-${pkgver}-x86_64/CHANGELOG.md" \
+    "${pkgdir}/usr/share/doc/${pkgname}/CHANGELOG.md"
+  cp -R "${srcdir}/cognac-${pkgver}-x86_64/docs" "${pkgdir}/usr/share/doc/${pkgname}/docs"
 }

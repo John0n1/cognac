@@ -13,16 +13,16 @@
   Cognac is an intelligent compatibility and installation layer for Windows <code>.exe</code> applications on Linux.
 </p>
 <p align="center">
-  <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/cognac_0.1.0_amd64.deb">
+  <a href="https://github.com/John0n1/cognac/releases/download/v0.2.0/cognac_0.2.0_amd64.deb">
     <img alt="DEB" src="https://img.shields.io/badge/download-DEB-A81D33?logo=debian&logoColor=white">
   </a>
-  <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/cognac-0.1.0-1.x86_64.rpm">
+  <a href="https://github.com/John0n1/cognac/releases/download/v0.2.0/cognac-0.2.0-1.x86_64.rpm">
     <img alt="RPM" src="https://img.shields.io/badge/download-RPM-294172?logo=fedora&logoColor=white">
   </a>
-  <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/cognac-bin-0.1.0-1-x86_64.pkg.tar.zst">
+  <a href="https://github.com/John0n1/cognac/releases/download/v0.2.0/cognac-bin-0.2.0-1-x86_64.pkg.tar.zst">
     <img alt="Arch Linux" src="https://img.shields.io/badge/download-Arch-1793D1?logo=archlinux&logoColor=white">
   </a>
-  <a href="https://github.com/John0n1/cognac/releases/download/v0.1.0/Cognac-0.1.0-x86_64.AppImage">
+  <a href="https://github.com/John0n1/cognac/releases/download/v0.2.0/Cognac-0.2.0-x86_64.AppImage">
     <img alt="AppImage" src="https://img.shields.io/badge/download-AppImage-2EA3F2?logo=appimage&logoColor=white">
   </a>
 </p>
@@ -47,6 +47,40 @@ No Winetricks rabbit hole.<br>
 No endless terminal output.
 
 If a Windows application can reasonably be made to run on Linux, Cognac should figure out how.
+
+Host BIOS/UEFI updaters require a physical firmware update interface. Cognac
+recognizes supported markers and stops application-runner and VM fallback for
+these packages. For Inno Setup packages, inspect and extract without running them:
+
+```bash
+cognac inspect-firmware update.exe --extract-to ./new-firmware-directory --json
+```
+
+This requires `innoextract` and a destination that does not already exist. It
+reports capsule headers, hashes, nested executable classifications, host identity,
+and readable ESRT entries. Inspection does not authenticate or flash firmware.
+Native updates for trusted, available fwupd releases use `firmware-devices`,
+`flash-firmware --device ID --version VERSION --dry-run`, and then `--yes`.
+Cognac also analyzes hardware dependencies independently of manufacturer:
+
+```bash
+cognac inspect-hardware update.exe --payload-dir ./new-firmware-directory --json
+cognac inspect-hardware flash-tool.exe --export-embedded ./new-driver-directory
+cognac decode-ioctl 0x8337EAF2
+cognac hardware-plan update.exe --device EXACT_DEVICE_ID --version VERSION
+```
+
+This discovers real PE imports, embedded kernel drivers, device-name hints and
+retained COFF function locations. Physical-memory and port-I/O dependencies
+require a verified native adapter and cannot silently fall through to a runner.
+`hardware-plan` reviews a trusted fwupd release as a native alternative; it does
+not authenticate or install the Windows package's payload. See
+[hardware analysis and native adapters](docs/hardware.md).
+
+The experimental Phoenix SCT EFI implementation successfully updated one
+verified physical platform. It remains restricted to that exact platform and
+payload; it is not a universal flash backend. See
+[firmware support and backend requirements](docs/firmware.md).
 
 ---
 
@@ -713,17 +747,17 @@ Download a package from the [latest GitHub release](https://github.com/John0n1/c
 
 ```bash
 # Debian, Ubuntu, Mint, Pop!_OS
-sudo apt install ./cognac_0.1.0_amd64.deb
+sudo apt install ./cognac_0.2.0_amd64.deb
 
 # Fedora, openSUSE, RHEL-family
-sudo dnf install ./cognac-0.1.0-1.x86_64.rpm
+sudo dnf install ./cognac-0.2.0-1.x86_64.rpm
 
 # Arch Linux and derivatives
-sudo pacman -U ./cognac-bin-0.1.0-1-x86_64.pkg.tar.zst
+sudo pacman -U ./cognac-bin-0.2.0-1-x86_64.pkg.tar.zst
 
 # Portable AppImage
-chmod +x Cognac-0.1.0-x86_64.AppImage
-./Cognac-0.1.0-x86_64.AppImage --help
+chmod +x Cognac-0.2.0-x86_64.AppImage
+./Cognac-0.2.0-x86_64.AppImage --help
 ```
 
 The release also includes an AUR-ready `PKGBUILD`, `.SRCINFO`, a generic binary
